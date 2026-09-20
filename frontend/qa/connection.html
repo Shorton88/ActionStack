@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Connection settings · simulated QA</title>
+  </head>
+  <body>
+    <div id="actionstack-root"></div>
+    <script type="module">
+      // Exercise the real settings UI without changing stored connections or trust.
+      const originalFetch = window.fetch;
+      let settings = {
+        soar_url: "https://soar.example.test",
+        instance_name: "QA",
+        asset_id: null,
+        ca_pem: "",
+        ignore_certificate_errors: false,
+        request_timeout: 15,
+        label_prefix: "",
+        revision: 0,
+        token_configured: true,
+        demo: true,
+      };
+      const response = (data) =>
+        new Response(JSON.stringify({ data }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      window.fetch = async (url, init) => {
+        if (url === "/api/settings") {
+          if (init?.method === "POST") {
+            const body = JSON.parse(init.body);
+            const allowed = [
+              "soar_url",
+              "instance_name",
+              "asset_id",
+              "ca_pem",
+              "ignore_certificate_errors",
+              "request_timeout",
+              "label_prefix",
+              "revision",
+              "token",
+            ];
+            if (Object.keys(body).some((k) => !allowed.includes(k)))
+              return new Response(
+                JSON.stringify({
+                  error: { message: "Unknown connection settings." },
+                }),
+                { status: 400 },
+              );
+            settings = {
+              ...settings,
+              ...body,
+              revision: settings.revision + 1,
+            };
+          }
+          // Reproduce an older handler returning Splunk-owned storage metadata.
+          return response({
+            ...settings,
+            _key: String(settings.revision),
+            _user: "nobody",
+            internal_metadata: { owner: "storage" },
+          });
+        }
+        if (url === "/api/settings/test")
+          return response({
+            ok: true,
+            labels: ["events"],
+            demo: true,
+            message:
+              "Simulated connection check; certificate validation " +
+              (settings.ignore_certificate_errors ? "disabled" : "enabled") +
+              ".",
+          });
+        // Other reads use the local demo; only its read-only submission list uses POST.
+        if (init?.method === "POST" && url !== "/api/submissions/list")
+          return new Response("{}", { status: 400 });
+        return originalFetch(url, init);
+      };
+      await import("/src/main.tsx");
+    </script>
+  </body>
+</html>

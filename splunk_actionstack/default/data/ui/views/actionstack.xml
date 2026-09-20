@@ -1,0 +1,4 @@
+<dashboard version="1.1" script="actionstack.js" stylesheet="actionstack.css" theme="dark" hideTitle="true">
+  <label>ActionStack</label>
+  <row><panel><html><div id="actionstack-root"></div></html></panel></row>
+</dashboard>

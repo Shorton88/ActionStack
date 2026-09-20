@@ -1,0 +1,14 @@
+[]
+access = read : [ * ], write : [ admin ]
+export = none
+
+[views]
+access = read : [ * ], write : [ admin ]
+
+[collections]
+access = read : [ admin ], write : [ admin ]
+export = none
+
+[passwords]
+access = read : [ admin ], write : [ admin ]
+export = none

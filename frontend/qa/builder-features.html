@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Builder features · isolated QA</title>
+  </head>
+  <body>
+    <div id="actionstack-root"></div>
+    <script type="module">
+      const originalFetch = window.fetch;
+      const lookup = {
+        search:
+          "| inputlookup identity_lookup_expanded | eval display_name=identity | table identity display_name",
+        app: "search",
+        value_field: "identity",
+        label_field: "display_name",
+        min_chars: 3,
+        debounce_ms: 50,
+      };
+      let forms = [
+        {
+          id: "qa-features",
+          workspace_id: "security",
+          title: "Employee request QA",
+          description: "Isolated preview. No live SOAR delivery.",
+          category: "People",
+          icon: "file",
+          accent: "cyan",
+          intro: "",
+          fields: [
+            {
+              key: "people_section",
+              type: "section",
+              label: "People",
+              help: "Lookup and required field checks",
+              collapsed: true,
+            },
+            { key: "person", type: "lookup", label: "Person", lookup },
+            {
+              key: "people",
+              type: "lookup_multi",
+              label: "Additional people",
+              lookup,
+            },
+            { key: "reason", type: "text", label: "Reason", required: true },
+            { key: "other_section", type: "section", label: "Other details" },
+            { key: "urgent", type: "checkbox", label: "Urgent" },
+          ],
+          mapping: {
+            label: "events",
+            tags: [],
+            severity: "low",
+            sensitivity: "amber",
+            run_automation: false,
+            title_prefix: "Request",
+            approval: {
+              mode: "always",
+              policy: "teams_reactions",
+              conditions: [],
+            },
+          },
+          access: {
+            view_roles: [],
+            submit_roles: [],
+            edit_roles: ["admin"],
+            team_roles: [],
+          },
+          revision: 1,
+          version: 1,
+          state: "published",
+          updated_by: "fixture",
+        },
+      ];
+      const response = (data) =>
+        new Response(JSON.stringify({ data }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      window.fetch = async (url, init) => {
+        if (url === "/api/admin/forms" || url === "/api/forms")
+          return response(forms);
+        if (url === "/api/admin/forms/save") {
+          const { form } = JSON.parse(init.body);
+          const saved = {
+            ...form,
+            revision: 1,
+            version: 0,
+            state: "draft",
+            updated_by: "demo.user",
+          };
+          forms = [...forms, saved];
+          return response(saved);
+        }
+        if (url === "/api/lookups/options") {
+          const body = JSON.parse(init.body);
+          return originalFetch("/api/admin/lookups/preview", {
+            ...init,
+            body: JSON.stringify({ config: lookup, term: body.term }),
+          });
+        }
+        if (
+          init?.method === "POST" &&
+          ![
+            "/api/admin/lookups/preview",
+            "/api/admin/forms/validate",
+            "/api/submissions/list",
+          ].includes(url)
+        )
+          return new Response("{}", { status: 400 });
+        return originalFetch(url, init);
+      };
+      await import("/src/main.tsx");
+    </script>
+  </body>
+</html>
