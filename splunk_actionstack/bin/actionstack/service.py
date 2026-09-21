@@ -9,7 +9,7 @@ from .core import APP, Error, Conflict, allowed, capable, require, clone, digest
 
 from .workspaces import Workspaces, DEFAULT_WORKSPACE
 from .validation_policies import ValidationPolicies, validate_request, block_policy, public_policy
-from .lookups import validate_source
+from .lookups import validate_source,lookup_spl
 from .field_validation import inline_form, validate_field_inputs
 
 DEFAULT_SETTINGS={'soar_url':'','instance_name':'Splunk Enterprise','asset_id':None,'ca_pem':'','ignore_certificate_errors':False,'request_timeout':15,'label_prefix':'','revision':0}
@@ -270,12 +270,18 @@ class Service(Workspaces,ValidationPolicies):
         return {'fingerprint':hashlib.sha256(body['value'].encode('utf-8')).hexdigest()}
 
     def run_lookup(self,actor,config,term,exact=False):
-        validate_source(config)
+        lookup_spl(config,term,exact)
         if not self.lookup: raise Error(503,'Lookup search is not configured on this search head.')
         minute=int(time.time()//60)
+        bucket='lookup:'+digest(actor['username'])
+        # Avoid an HTTP conflict for every prior lookup this minute. The unique
+        # insert still arbitrates concurrent callers and pre-upgrade records.
+        occupied={r['_key'] for r in self.store.list('ratelimits',{'minute':minute,'bucket':bucket})}
         for slot in range(60):
+            key=bucket+':'+str(minute)+':'+str(slot)
+            if key in occupied: continue
             try:
-                self.store.insert('ratelimits',{'_key':'lookup:'+digest(actor['username'])+':'+str(minute)+':'+str(slot),'minute':minute})
+                self.store.insert('ratelimits',{'_key':key,'minute':minute,'bucket':bucket})
                 break
             except Conflict: pass
         else: raise Error(429,'Lookup search limit reached. Pause briefly before searching again.')
@@ -297,6 +303,7 @@ class Service(Workspaces,ValidationPolicies):
             config=field['lookup']
         validate_source(config)
         term=body['term']
+        if isinstance(term,list): return self.run_lookup(actor,config,term,exact=True)
         if not isinstance(term,str): raise Error(400,'Enter a search term.')
         if len(term)<config['min_chars']: return {'options':[],'more':False}
         return self.run_lookup(actor,config,term)

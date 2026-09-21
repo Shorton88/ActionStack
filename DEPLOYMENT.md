@@ -67,9 +67,11 @@ Single-value and multiple-value lookup fields run SPL as the requesting Splunk u
 
 Set **Value field sent to SOAR** to `identity` and **Display label field** to `display_name`. Keep both in the final results. Suggestions match either field; only selected values are submitted and revalidated.
 
-Searches must start with `inputlookup`. Supported transformations are `eval`, `where`, `search`, `fields`, `table`, `rename`, `dedup`, `sort`, `head`, `tail`, `fillnull`, `rex`, `regex`, `spath`, `stats`, `eventstats`, `streamstats`, `mvexpand`, `makemv`, `mvcombine`, `nomv`, `convert`, and `replace`. Macros, subsearches, custom commands, and write commands are not supported.
+Searches must start with `inputlookup`. ActionStack accepts `local=true` or `local=false` before or after the lookup name and passes it through to Splunk. Supported transformations are `eval`, `where`, `search`, `fields`, `table`, `rename`, `dedup`, `sort`, `head`, `tail`, `fillnull`, `rex`, `regex`, `spath`, `stats`, `eventstats`, `streamstats`, `mvexpand`, `makemv`, `mvcombine`, `nomv`, `convert`, and `replace`. Macros, subsearches, custom commands, and write commands are not supported.
 
-The default search delay is 50 ms after at least three characters. Results are limited to 25 prefix matches. Search jobs have a five-second execution limit. Each form supports up to five lookup fields; multiple-value fields accept up to 25 items. Large lookups may require scans even when results are limited.
+The default search delay is 50 ms after at least three characters. Results are limited to 25 prefix matches. Search jobs have a five-second execution limit. Each form supports up to five lookup fields; multiple-value fields accept up to 25 items. Recent suggestions are cached in the field for 30 seconds; submission checks always run against the lookup again. Large lookups may require scans even when results are limited.
+
+Multiple-value text and lookup fields accept comma-, newline-, or semicolon-separated lists. Paste a list, or type it and press Enter or **Add values**. For lookups, use exact values from the configured SOAR value field; use search suggestions to select by display label. A batch with unknown values is rejected without adding a partial list. Duplicate values are removed.
 
 ## Permissions
 

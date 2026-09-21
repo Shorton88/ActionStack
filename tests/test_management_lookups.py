@@ -71,6 +71,28 @@ class ManagementTests(unittest.TestCase):
         request={'form_id':'block-object','form_version':2,'field':'identity','term':'al'}
         self.assertEqual(self.svc.lookup_options(self.user,request)['options'],[]);self.svc.lookup.search.assert_not_called()
         with self.assertRaises(Error):self.svc.lookup_options(self.user,{'config':CONFIG,'term':'ali'},True)
+    def test_pasted_values_use_exact_batch_search_with_the_same_acl(self):
+        self.lookup_form();self.svc.lookup=Mock();self.svc.lookup.search.return_value={'options':[],'more':False}
+        request={'form_id':'block-object','form_version':2,'field':'identity','term':['a','bob']}
+        self.svc.lookup_options(self.user,request)
+        self.svc.lookup.search.assert_called_once_with(CONFIG,['a','bob'],True)
+        for values in [[],['x']*26,[None],['bad\nvalue'],['x'*201]]:
+            with self.subTest(values=values),self.assertRaises(Error):self.svc.lookup_options(self.user,dict(request,term=values))
+        with self.assertRaises(Error):self.svc.lookup_options(self.user,dict(request,config=CONFIG))
+        with self.assertRaises(Error):self.svc.lookup_options(fx.actor(caps=['use']),request)
+    def test_lookup_budget_skips_used_slots_but_handles_insert_races(self):
+        self.svc.lookup=Mock()
+        with patch('actionstack.service.time.time',return_value=6000):
+            for _ in range(40):self.svc.run_lookup(self.user,CONFIG,'ali')
+            original=self.store.insert
+            with patch.object(self.store,'insert',wraps=original) as insert:
+                self.svc.run_lookup(self.user,CONFIG,'ali')
+                self.assertEqual(insert.call_count,1)
+            # A competing member claims the next free slot after our read.
+            with patch.object(self.store,'insert',side_effect=[Conflict('claimed'),{}]) as insert:
+                self.svc.run_lookup(self.user,CONFIG,'ali')
+                self.assertEqual(insert.call_count,2)
+                self.assertNotEqual(insert.call_args_list[0].args[1]['_key'],insert.call_args_list[1].args[1]['_key'])
     def test_lookup_budget_is_shared(self):
         self.svc.lookup=Mock();self.svc.lookup.search.return_value={'options':[],'more':False}
         for _ in range(60):self.svc.run_lookup(self.user,CONFIG,'ali')
@@ -92,6 +114,7 @@ class LookupAdapterTests(unittest.TestCase):
         self.assertEqual(len(result['options']),25);self.assertTrue(result['more'])
         self.assertTrue(rest.call.call_args_list[0].args[1].startswith('/servicesNS/alice%40example.test/search/'))
         self.assertEqual(rest.call.call_args_list[0].kwargs['form']['max_time'],'5')
+        self.assertEqual(rest.call.call_args_list[0].kwargs['form']['exec_mode'],'blocking')
         self.assertEqual(rest.call.call_args_list[-1].args[0],'DELETE')
         self.assertEqual(rest.call.call_args_list[-2].kwargs['params']['count'],26)
     def test_partial_failed_or_malformed_results_fail_closed_and_cleanup(self):

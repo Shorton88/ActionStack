@@ -2541,11 +2541,8 @@
   margin-top: 10px;
 }
 .actionstack-lookup-results {
-  position: absolute;
-  top: 54px;
-  left: 0;
-  right: 0;
-  z-index: 15;
+  position: relative;
+  margin-top: 8px;
   max-height: 250px;
   overflow: auto;
   padding: 6px;

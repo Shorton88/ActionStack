@@ -6,6 +6,15 @@ from actionstack.lookups import validate_source,lookup_spl,LookupSearch
 
 CONFIG={'search':'| inputlookup identities | eval display=first . " " . last | table identity display','value_field':'identity','label_field':'display','app':'search','min_chars':3,'debounce_ms':50}
 class LookupPipelines(unittest.TestCase):
+ def test_local_option_before_or_after_lookup_preserves_pipeline(self):
+  for source in ['inputlookup local=true identities','inputlookup identities local=true','inputlookup strict=true identities local=true']:
+   c=dict(CONFIG,search='| '+source+' | fields identity | mvexpand identity',label_field='identity')
+   spl,_=lookup_spl(c,'ali')
+   self.assertIn('| inputlookup strict=true local=true identities | fields identity | mvexpand identity | where',spl)
+  legacy={'search':'| inputlookup identities local=true | fields identity','app':'search','min_chars':3,'debounce_ms':50}
+  self.assertEqual(validate_source(legacy),('identity','identity'))
+  for source in ['inputlookup identities local=yes','inputlookup identities local=true local=false','inputlookup identities strict=false','inputlookup identities append=true','inputlookup identities other']:
+   with self.subTest(source=source),self.assertRaises(Error):validate_source(dict(CONFIG,search=source))
  def test_transformations_execute_before_matching_both_columns(self):
   spl,column=lookup_spl(CONFIG,'Alice')
   self.assertEqual(column,'identity');self.assertIn('eval display=first . " " . last | table identity display | where',spl)

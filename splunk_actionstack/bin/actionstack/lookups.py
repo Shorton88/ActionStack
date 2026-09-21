@@ -33,17 +33,26 @@ def pipeline(search):
     parts.append(''.join(current).strip())
     if parts and not parts[0]: parts=parts[1:]
     if not parts or any(not part for part in parts): raise Error(400,'Enter a complete lookup pipeline.')
-    source=re.fullmatch(r'inputlookup\s+(?:strict=true\s+)?([A-Za-z0-9_][A-Za-z0-9_.-]{0,127})',parts[0],re.I)
-    if not source: raise Error(400,'Start with | inputlookup lookup_name, then add read-only SPL transformations.')
+    tokens=parts[0].split()
+    names=[]; options={}
+    for token in tokens[1:]:
+        option=re.fullmatch(r'(strict|local)=(true|false)',token,re.I)
+        if option:
+            key,val=option[1].lower(),option[2].lower()
+            if key in options or (key=='strict' and val!='true'): raise Error(400,'Use strict=true and at most one local=true or local=false option.')
+            options[key]=val
+        elif re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}',token): names.append(token)
+        else: raise Error(400,'Unsupported inputlookup option. Use local=true or local=false.')
+    if tokens[0].lower()!='inputlookup' or len(names)!=1: raise Error(400,'Start with | inputlookup lookup_name, then add read-only SPL transformations.')
     for part in parts[1:]:
         command=re.match(r'([a-zA-Z]+)(?:\s|$)',part)
         if not command or command[1].lower() not in READ_COMMANDS: raise Error(400,'Unsupported lookup command. Use read-only transformations such as eval, where, table, fields, rename or stats.')
-    parts[0]='inputlookup strict=true '+source[1]
+    parts[0]='inputlookup strict=true '+('local='+options['local']+' ' if 'local' in options else '')+names[0]
     return ' | '.join(parts)
 
 def lookup_fields(config):
     # Older one-column forms keep their existing value/label mapping.
-    legacy=SOURCE.fullmatch(config.get('search',''))
+    legacy=SOURCE.fullmatch('| '+re.sub(r'\b(?:strict|local)=(?:true|false)\s+', '',pipeline(config.get('search','')),flags=re.I))
     value=config.get('value_field',legacy[2] if legacy else '')
     label=config.get('label_field',value)
     if not all(isinstance(v,str) and IDENTIFIER.fullmatch(v) for v in [value,label]): raise Error(400,'Choose the result field sent to SOAR and the field displayed as its label.')
@@ -82,7 +91,9 @@ class LookupSearch:
         base='/servicesNS/'+quote(self.username,safe='')+'/'+quote(config['app'],safe='')+'/search/jobs'
         sid=None
         try:
-            job=self.rest.call('POST',base,form={'search':spl,'exec_mode':'normal','max_time':'5','auto_cancel':'30','auto_finalize_ec':'0','status_buckets':'0'})
+            # Blocking dispatch avoids repeated status requests while SPL runs.
+            # Inspect the final state anyway: finalized partial results are unsafe.
+            job=self.rest.call('POST',base,form={'search':spl,'exec_mode':'blocking','max_time':'5','auto_cancel':'30','auto_finalize_ec':'0','status_buckets':'0'})
             sid=job.get('sid') if isinstance(job,dict) else None
             if not isinstance(sid,str) or not re.fullmatch(r'[A-Za-z0-9_.-]+',sid): raise Error(502,'Splunk did not return a lookup search ID.')
             path=base+'/'+quote(sid,safe=''); deadline=time.monotonic()+6
