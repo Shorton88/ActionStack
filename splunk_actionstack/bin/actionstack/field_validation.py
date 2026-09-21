@@ -22,7 +22,7 @@ def definition_checks(fields):
     for field in fields:
         rules=field.get('validation',[])
         if not isinstance(rules,list) or len(rules)>64: raise Error(400,'Use at most 64 validation checks per field.')
-        if field['type']=='section' and rules: raise Error(400,'Sections cannot have validation checks.')
+        if field['type'] in ['section','static_text'] and rules: raise Error(400,'Sections and static text cannot have validation checks.')
         for rule in rules:
             if not isinstance(rule,dict) or 'field' in rule or rule.get('operator')=='required': raise Error(400,'Set Required in the field settings.')
             op=rule.get('operator')

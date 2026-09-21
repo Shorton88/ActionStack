@@ -39,7 +39,7 @@ export function FieldValidation({
       validation: rules.map((r, n) => (n === i ? { ...r, ...patch } : r)),
     });
   }
-  if (field.type === "section") return null;
+  if (["section", "static_text"].includes(field.type)) return null;
   return (
     <section className="actionstack-field-validation">
       <h4>Validation</h4>

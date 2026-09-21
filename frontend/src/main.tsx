@@ -1,3 +1,4 @@
+import { StaticText } from "./StaticText";
 import {
   randomId,
   cloneDefinition,
@@ -94,6 +95,7 @@ const fieldTypes = [
   ["date", "Date"],
   ["datetime", "Date & time"],
   ["section", "Section"],
+  ["static_text", "Static text"],
 ];
 function formatDate(date: string) {
   return new Intl.DateTimeFormat(undefined, {
@@ -276,6 +278,7 @@ function FormFields({
   const renderField = (f: Field) => {
     if (f.show_when && values[f.show_when.field] !== f.show_when.equals)
       return null;
+    if (f.type === "static_text") return <StaticText key={f.key} field={f} />;
     if (f.type === "section")
       return (
         <div className="form-section" key={f.key}>
@@ -453,6 +456,7 @@ function defaults(form: Form) {
   const v: Record<string, unknown> = {};
   for (const f of form.fields)
     if (
+      !["section", "static_text"].includes(f.type) &&
       (f.default !== undefined || f.type === "checkbox") &&
       (!f.show_when || v[f.show_when.field] === f.show_when.equals)
     )
@@ -1249,7 +1253,7 @@ function RequestForm({
               {form.fields
                 .filter(
                   (f) =>
-                    f.type !== "section" &&
+                    !["section", "static_text"].includes(f.type) &&
                     values[f.key] !== undefined &&
                     (!f.show_when ||
                       values[f.show_when.field] === f.show_when.equals),
@@ -1659,6 +1663,12 @@ function Builder({
             : {}),
           label: fieldTypes.find((t) => t[0] === type)?.[1] || "Field",
           required: false,
+          ...(type === "static_text"
+            ? {
+                help: "Add a description or guidance for your team.",
+                tone: "text" as const,
+              }
+            : {}),
           ...(["select", "radio", "multiselect"].includes(type)
             ? {
                 options: [
@@ -1945,6 +1955,7 @@ function Builder({
                           date: "▦",
                           datetime: "◷",
                           section: "▬",
+                          static_text: "¶",
                           checkbox: "☑",
                           radio: "◉",
                           multiselect: "☷",
@@ -2061,7 +2072,8 @@ function Builder({
                       </button>
                     </div>
                   </div>
-                  {f.type !== "section" && (
+                  {f.type === "static_text" && <StaticText field={f} />}
+                  {!["section", "static_text"].includes(f.type) && (
                     <div
                       className={
                         "canvas-placeholder " +
@@ -2118,7 +2130,7 @@ function Builder({
             {field && (
               <>
                 <label className="field">
-                  Label
+                  {field.type === "static_text" ? "Heading" : "Label"}
                   <input
                     value={field.label}
                     onChange={(e) => fieldUpdate({ label: e.target.value })}
@@ -2131,7 +2143,11 @@ function Builder({
                     value={field.key}
                     onChange={(e) => fieldUpdate({ key: e.target.value })}
                   />
-                  <small>Stable identifier used in SOAR.</small>
+                  <small>
+                    {field.type === "static_text"
+                      ? "Identifier for this text item. It is not sent to SOAR."
+                      : "Stable identifier used in SOAR."}
+                  </small>
                 </label>
                 <label className="field">
                   Field type
@@ -2143,8 +2159,26 @@ function Builder({
                         default: undefined,
                         collapsed:
                           e.target.value === "section" ? false : undefined,
-                        validation:
-                          e.target.value === "section" ? [] : field.validation,
+                        validation: ["section", "static_text"].includes(
+                          e.target.value,
+                        )
+                          ? []
+                          : field.validation,
+                        tone:
+                          e.target.value === "static_text" ? "text" : undefined,
+                        ...(e.target.value === "static_text"
+                          ? {
+                              required: false,
+                              required_when: undefined,
+                              cef_key: undefined,
+                              options: undefined,
+                              placeholder: undefined,
+                              min: undefined,
+                              max: undefined,
+                              min_length: undefined,
+                              max_length: undefined,
+                            }
+                          : {}),
                         lookup: ["lookup", "lookup_multi"].includes(
                           e.target.value,
                         )
@@ -2169,6 +2203,25 @@ function Builder({
                     ))}
                   </select>
                 </label>
+                {field.type === "static_text" && (
+                  <label className="field">
+                    Style
+                    <select
+                      value={field.tone || "text"}
+                      onChange={(e) =>
+                        fieldUpdate({ tone: e.target.value as Field["tone"] })
+                      }
+                    >
+                      <option value="text">Plain text</option>
+                      <option value="info">Information</option>
+                      <option value="warning">Warning</option>
+                    </select>
+                    <small>
+                      Display-only content. Use Show condition below for a
+                      conditional warning.
+                    </small>
+                  </label>
+                )}
                 {field.type === "section" && (
                   <label className="toggle-row">
                     <div>
@@ -2190,7 +2243,7 @@ function Builder({
                 {["lookup", "lookup_multi"].includes(field.type) && (
                   <LookupSettings field={field} onChange={fieldUpdate} />
                 )}
-                {field.type !== "section" && (
+                {!["section", "static_text"].includes(field.type) && (
                   <label className="toggle-row">
                     <div>
                       <b>Required field</b>
@@ -2226,17 +2279,19 @@ function Builder({
                     </button>
                   </div>
                 ))}
+                {field.type !== "static_text" && (
+                  <label className="field">
+                    Placeholder
+                    <input
+                      value={field.placeholder || ""}
+                      onChange={(e) =>
+                        fieldUpdate({ placeholder: e.target.value })
+                      }
+                    />
+                  </label>
+                )}
                 <label className="field">
-                  Placeholder
-                  <input
-                    value={field.placeholder || ""}
-                    onChange={(e) =>
-                      fieldUpdate({ placeholder: e.target.value })
-                    }
-                  />
-                </label>
-                <label className="field">
-                  Helper text
+                  {field.type === "static_text" ? "Message" : "Helper text"}
                   <textarea
                     rows={2}
                     value={field.help || ""}
@@ -2311,6 +2366,7 @@ function Builder({
                 {![
                   "multiselect",
                   "section",
+                  "static_text",
                   "text_list",
                   "lookup_multi",
                 ].includes(field.type) && (
@@ -2357,7 +2413,9 @@ function Builder({
                     <option value="">Always show</option>
                     {editor.fields
                       .slice(0, selected)
-                      .filter((f) => f.type !== "section")
+                      .filter(
+                        (f) => !["section", "static_text"].includes(f.type),
+                      )
                       .map((f) => (
                         <option key={f.key} value={f.key}>
                           {f.label}
@@ -2389,15 +2447,17 @@ function Builder({
                     />
                   </label>
                 )}
-                <label className="field">
-                  Optional CEF mapping
-                  <input
-                    className="mono"
-                    placeholder="e.g. destinationAddress"
-                    value={field.cef_key || ""}
-                    onChange={(e) => fieldUpdate({ cef_key: e.target.value })}
-                  />
-                </label>
+                {field.type !== "static_text" && (
+                  <label className="field">
+                    Optional CEF mapping
+                    <input
+                      className="mono"
+                      placeholder="e.g. destinationAddress"
+                      value={field.cef_key || ""}
+                      onChange={(e) => fieldUpdate({ cef_key: e.target.value })}
+                    />
+                  </label>
+                )}
               </>
             )}
           </aside>

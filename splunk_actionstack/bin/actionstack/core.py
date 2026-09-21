@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 APP = 'splunk_actionstack'
 PREFIX = 'actionstack_'
 DURATIONS = {'4h': 14400, '1d': 86400, '30d': 2592000, '60d': 5184000, '90d': 7776000, 'forever': None}
-TYPES = {'text', 'textarea', 'number', 'email', 'url', 'date', 'datetime', 'select', 'multiselect', 'radio', 'checkbox', 'section', 'lookup', 'text_list', 'lookup_multi'}
+TYPES = {'text', 'textarea', 'number', 'email', 'url', 'date', 'datetime', 'select', 'multiselect', 'radio', 'checkbox', 'section', 'static_text', 'lookup', 'text_list', 'lookup_multi'}
 KEY = re.compile(r'^[A-Za-z_][A-Za-z0-9_]{0,63}$')
 RESERVED_FIELDS = {'submission_id','form_id','form_version','submitted_at','submitted_by','approval_required','approval_policy','permanent'}
 SLUG = re.compile(r'^[a-z][a-z0-9-]{0,63}$')
@@ -94,7 +94,7 @@ def validate_definition(raw, roles):
         raise Error(400, 'Add between 1 and 60 fields.')
     keys = set()
     for field in fields:
-        if not isinstance(field, dict) or set(field) - {'key','type','label','required','default','placeholder','help','options','show_when','min','max','min_length','max_length','cef_key','lookup','required_when','validation','collapsed'}:
+        if not isinstance(field, dict) or set(field) - {'key','type','label','required','default','placeholder','help','options','show_when','min','max','min_length','max_length','cef_key','lookup','required_when','validation','collapsed','tone'}:
             raise Error(400, 'Invalid field configuration.')
         key = field.get('key', '')
         if not isinstance(key, str) or not KEY.fullmatch(key) or key in keys or key in RESERVED_FIELDS:
@@ -102,6 +102,10 @@ def validate_definition(raw, roles):
         keys.add(key)
         if field.get('type') not in TYPES or not isinstance(field.get('label'), str) or not 1 <= len(field['label']) <= 150:
             raise Error(400, 'Every field needs a valid type and label.')
+        if 'tone' in field and (field['type']!='static_text' or field['tone'] not in ['text','info','warning']):
+            raise Error(400,'Static text style must be text, info or warning.')
+        if field['type']=='static_text' and (field.get('required') or field.get('required_when') or field.get('cef_key') or field.get('default') is not None):
+            raise Error(400,'Static text is display-only; it cannot require input, have a default value or map to SOAR.')
         if 'collapsed' in field and (field['type']!='section' or type(field['collapsed']) is not bool): raise Error(400,'Collapsed by default is a section option and must be true or false.')
         if field['type'] in ['lookup','lookup_multi']:
             from .lookups import validate_source
@@ -150,7 +154,7 @@ def validate_definition(raw, roles):
         if rule:
             if not isinstance(rule,dict) or set(rule)!={'field','equals'} or rule['field'] not in seen or not isinstance(rule['equals'],(str,bool,int,float)):
                 raise Error(400, 'Conditions must reference an earlier field and a scalar value.')
-        seen.add(field['key'])
+        if field['type'] not in ['section','static_text']: seen.add(field['key'])
     m=f.setdefault('mapping',{})
     if not isinstance(m,dict) or set(m)-{'label','tags','severity','sensitivity','run_automation','policy','title_prefix','approval','enrichment'}:
         raise Error(400, 'Invalid SOAR mapping.')
@@ -196,13 +200,13 @@ def validate_definition(raw, roles):
 def validate_inputs(form, incoming):
     if not isinstance(incoming,dict):
         raise Error(400,'Form inputs must be an object.')
-    fields=form['fields']; known={f['key'] for f in fields if f['type']!='section'}
+    fields=form['fields']; known={f['key'] for f in fields if f['type'] not in ['section','static_text']}
     if set(incoming)-known:
         raise Error(400,'Unexpected form fields.',{k:'Unknown field' for k in set(incoming)-known})
     output={}; errors={}
     for f in fields:
         k=f['key']; t=f['type']
-        if t=='section':
+        if t in ['section','static_text']:
             continue
         if not visible(f,output):
             if k in incoming and incoming[k] not in [None,'',[]]:
@@ -309,7 +313,7 @@ def event_payload(form, actor, inputs, submission_id, submitted_at, settings):
             permanent=inputs['duration']=='forever'
             derived={'requested_duration_seconds':DURATIONS[inputs['duration']],'permanent':permanent}
     who={k:clone(actor[k]) for k in ['username','roles','email','display_name'] if actor.get(k)}
-    envelope={'contract_version':1,'submission_id':submission_id,'submitted_at':submitted_at,'source':{'app':APP,'instance':settings.get('instance_name','Splunk Enterprise')},'form':{'workspace_id':form.get('workspace_id','security'),'id':form['id'],'title':form['title'],'version':form['version'],'fields':{f['key']:f['label'] for f in form['fields'] if f['type']!='section'}},'submitted_by':who,'routing':{'mapping_version':form['revision'],'label':m['label'],'tags':m.get('tags',[])},'inputs':inputs,'derived':derived,'policy':policy}
+    envelope={'contract_version':1,'submission_id':submission_id,'submitted_at':submitted_at,'source':{'app':APP,'instance':settings.get('instance_name','Splunk Enterprise')},'form':{'workspace_id':form.get('workspace_id','security'),'id':form['id'],'title':form['title'],'version':form['version'],'fields':{f['key']:f['label'] for f in form['fields'] if f['type'] not in ['section','static_text']}},'submitted_by':who,'routing':{'mapping_version':form['revision'],'label':m['label'],'tags':m.get('tags',[])},'inputs':inputs,'derived':derived,'policy':policy}
     if form.get('validation_policy'): envelope['form']['validation_policy']={k:form['validation_policy'][k] for k in ['id','revision']}
     container={'name':m.get('title_prefix',form['title'])+' · '+submission_id,'label':m['label'],'container_type':'default','description':'Submitted through ActionStack by '+actor['username'],'severity':m.get('severity','low'),'sensitivity':m.get('sensitivity','amber'),'status':'new','source_data_identifier':'splunk_actionstack:'+submission_id,'tags':m.get('tags',[]),'run_automation':False,'data':{'actionstack':envelope}}
     if settings.get('asset_id'): container['asset_id']=int(settings['asset_id'])

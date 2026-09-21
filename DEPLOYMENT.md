@@ -49,6 +49,8 @@ The integration uses SOAR's REST APIs. SOAR Cloud exposes the same intake APIs, 
 
 Use **Form builder** to add fields, validation, lookup searches, sections, and access rules. **Preview → Test validation** checks the form without creating a SOAR event. Save a draft while editing; publish to apply changes to new submissions.
 
+**Static text** adds a heading and message without collecting input. Choose plain text for section descriptions, or Information or Warning for a callout. Use **Show condition** to display it when an earlier field has a particular value. Line breaks are preserved; HTML is displayed as text. Static text is not included in submitted inputs or SOAR field mappings.
+
 Under **SOAR mapping**, choose a label, tags, and optional CEF mappings. **Allow SOAR automation on delivery** permits automation on the final submission artifact. Configure an active SOAR playbook for the container label. Delivery success means the event and artifact were created; execution status is shown separately.
 
 The **Approvals** tab marks requests that require approval. The SOAR playbook must enforce that requirement before performing actions. ActionStack does not collect approval decisions.

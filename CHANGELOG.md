@@ -2,6 +2,8 @@
 
 ## 0.5.2
 
+- Add static text to the form builder with plain, information, and warning styles and conditional visibility.
+
 - Accept comma-, newline-, and semicolon-separated lists in multiple-value text and lookup fields. Lookup lists are checked together before adding, and duplicate values are removed.
 - Keep lookup suggestions inside the form layout so results are not clipped at the bottom of a panel.
 - Allow `local=true` and `local=false` before or after the inputlookup name.

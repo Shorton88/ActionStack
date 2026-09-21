@@ -1,4 +1,5 @@
 export type Field = {
+  tone?: "text" | "info" | "warning";
   collapsed?: boolean;
   lookup?: LookupConfig;
   validation?: Omit<ValidationRule, "field">[];
