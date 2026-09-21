@@ -1,4 +1,4 @@
-"""Authenticated persistent REST entrypoint for Splunk Enterprise 10.2.4."""
+"""Authenticated persistent REST entrypoint for Splunk Enterprise."""
 import json
 import os
 import sys

@@ -16,7 +16,12 @@ Build forms in Splunk that submit events to Splunk SOAR.
 
 ## Installation
 
-Download the app from [Splunkbase](https://splunkbase.splunk.com/app/9812). For a search head cluster, deploy the app through the SHC deployer.
+ActionStack runs on a standalone Splunk Enterprise search head or a search head cluster, with KV Store enabled.
+
+Download the app from [Splunkbase](https://splunkbase.splunk.com/app/9812):
+
+- **Standalone search head:** install the app directly through Splunk Web.
+- **Search head cluster:** deploy the app through the SHC deployer.
 
 Open ActionStack as a Splunk administrator. The setup wizard creates the first workspace and configures the SOAR connection. Create a form, select an existing SOAR label, and publish it. Enable **Allow SOAR automation on delivery** when the form should trigger active playbooks for that label.
 

@@ -4,9 +4,12 @@ Download ActionStack from [Splunkbase](https://splunkbase.splunk.com/app/9812).
 
 ## Install
 
-ActionStack runs on Splunk Enterprise search heads with KV Store enabled. Install the complete `splunk_actionstack` app. For a search head cluster, use the SHC deployer and confirm the same version is installed on every member.
+ActionStack runs on a standalone Splunk Enterprise search head or a search head cluster. Both require KV Store to be enabled. Install the complete `splunk_actionstack` app:
 
-The REST handler supports Python 3.9 and 3.13. The app uses the signed-in Splunk session for identity and roles, shared KV Store collections for application data, and Splunk's encrypted credential store for the SOAR token.
+- **Standalone search head:** in Splunk Web, open **Apps → Manage Apps → Install app from file**, upload the package, and restart Splunk if prompted.
+- **Search head cluster:** use the SHC deployer and confirm the same version is installed on every member. Do not install the app directly on individual cluster members.
+
+The REST handler supports Python 3.9 and 3.13. The app uses the signed-in Splunk session for identity and roles, KV Store collections for application data, and Splunk's encrypted credential store for the SOAR token.
 
 After installation, open **ActionStack** as a Splunk administrator. Existing forms, workspaces, and submissions are retained when updating the app. Refresh Splunk Web after an update to load the new browser assets.
 
@@ -90,15 +93,15 @@ Lookup searches use the requesting user's session. Application storage uses serv
 
 A submission is recorded before delivery. Use **Retry delivery** for a failed or uncertain request. Only the original requester can retry, and current permissions are checked. Retries preserve the original form, inputs, identity, connection settings, and source identifiers. Connection changes apply to new submissions; retain old credentials until pending requests have been resolved.
 
-Delivery locks do not expire automatically. If a handler crashes while holding a lock, stop/drain the ActionStack handlers on **all** members, verify no delivery remains active, and inspect the submission and SOAR objects. Back up the records before removing only the abandoned `delivery:<submission-id>` key from `actionstack_locks`. Resume the handlers and retry through the app. Do not clear locks based only on age.
+Delivery locks do not expire automatically. If a handler crashes while holding a lock, stop/drain the ActionStack handlers on the standalone search head or on **all** cluster members, verify no delivery remains active, and inspect the submission and SOAR objects. Back up the records before removing only the abandoned `delivery:<submission-id>` key from `actionstack_locks`. Resume the handlers and retry through the app. Do not clear locks based only on age.
 
 ## Operations
 
 - Back up ActionStack KV collections and encrypted credentials with the Splunk deployment.
 - Preserve form revisions, connection snapshots, unfinished submissions, and active delivery locks during retention cleanup.
 - The catalog is paginated; submission lists show the latest 200 authorized records. KV scans are bounded at 50,000 records.
-- Delivery attempts are limited to 10 per user per minute across the cluster. Lookup searches are limited to 60 and activity refreshes to 20 per user per minute.
+- Delivery attempts are limited to 10 per user per minute. These limits are shared across members in a cluster. Lookup searches are limited to 60 and activity refreshes to 20 per user per minute.
 - The app does not run a background retry or retention service. Prune old rate-limit records through your administration process, retaining at least the last 24 hours.
-- Validate role isolation, credential access, delivery/retry behavior, and member failover in your deployment.
+- Validate role isolation, credential access, delivery/retry behavior, and, for clusters, member failover in your deployment.
 
 For a Splunk Web CSRF error, sign in again and check that the reverse proxy preserves session cookies, `X-Requested-With`, and `X-Splunk-Form-Key`. For a missing-label error, create the configured label in SOAR or change the form's mapping and publish it. Retrying an existing submission keeps its original label.

@@ -3209,10 +3209,11 @@ function ConnectionSettings({
               identity delivers their requests.
             </p>
             <div className="property-divider" />
-            <h3>Search head cluster</h3>
+            <h3>Standalone or clustered</h3>
             <p>
-              Forms, submission receipts and delivery locks use shared KV Store
-              collections. Deploy the same app bundle to every member.
+              Forms, submission receipts and delivery locks use Splunk KV Store.
+              Install on a standalone search head or deploy to all members of a
+              search head cluster.
             </p>
             <div className="property-divider" />
             <h3>Intake, ready for automation</h3>
