@@ -271,7 +271,7 @@ def validate_inputs(form, incoming):
 
 def approval_rule(form):
     rule=form['mapping'].get('approval')
-    if rule is not None: return dict(rule,policy='soar_playbook') if isinstance(rule,dict) and rule.get('policy')=='teams_reactions' else rule
+    if rule is not None: return rule
     if form['mapping'].get('policy')=='block_object':
         return {'mode':'conditional','conditions':[{'field':'duration','equals':'forever'}],'policy':'soar_playbook'}
     return {'mode':'never','conditions':[],'policy':'soar_playbook'}
@@ -280,7 +280,7 @@ def validate_approval(form):
     if 'approval' in form['mapping'] and form['mapping']['approval'] is None:
         raise Error(400,'Approval rules cannot be null.')
     rule=approval_rule(form)
-    if not isinstance(rule,dict) or set(rule)!={'mode','conditions','policy'} or rule.get('mode') not in ['never','always','conditional'] or rule.get('policy') not in ['teams_reactions','soar_playbook']:
+    if not isinstance(rule,dict) or set(rule)!={'mode','conditions','policy'} or rule.get('mode') not in ['never','always','conditional'] or rule.get('policy') != 'soar_playbook':
         raise Error(400,'Choose a valid approval mode and workflow.')
     conditions=rule['conditions']
     if not isinstance(conditions,list) or len(conditions)>20 or (rule['mode']=='conditional' and not conditions) or (rule['mode']!='conditional' and conditions):

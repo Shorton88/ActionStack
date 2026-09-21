@@ -40,7 +40,7 @@ class LookupPipelines(unittest.TestCase):
   self.assertEqual(validate_inputs(f,{'name':'Alice'}),{'name':'Alice'})
   f['fields'][0]['collapsed']='yes'
   with self.assertRaises(Error):validate_definition(f,fx.ROLES)
- def test_existing_teams_rule_routes_to_soar_playbook(self):
-  f=seed_form();f['mapping']['approval']={'mode':'always','conditions':[],'policy':'teams_reactions'}
+ def test_approval_routes_to_soar_playbook(self):
+  f=seed_form();f['mapping']['approval']={'mode':'always','conditions':[],'policy':'soar_playbook'}
   validate_definition(f,fx.ROLES)
   self.assertEqual(approval_policy(f,{}),{'approval_required':True,'approval_policy':'soar_playbook'})

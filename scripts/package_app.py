@@ -31,12 +31,15 @@ for name in ['react','react-dom','scheduler','lucide-react']:
     notices.extend(['\n'+name+' '+meta['version']+'\n',license_file.read_text()])
 (APP/'THIRD_PARTY_NOTICES.txt').write_text('\n'.join(notices))
 (APP/'LICENSE').write_bytes((ROOT/'LICENSE').read_bytes())
-(APP/'README.txt').write_text('ActionStack '+version+'\n\nNative Splunk app for Splunk Enterprise search head clusters and on-premises Splunk SOAR.\nLocally tested; live staging validation required.\nInstall with your SHC deployer. Configure the connection through Settings.\nSee documentation/DEPLOYMENT.md for deployment and acceptance checks.\nNo demo server, credentials, playbooks or security-product enforcement are included.\n')
+(APP/'README.txt').write_text('ActionStack '+version+'\n\nForm-based event submission from Splunk to Splunk SOAR.\nhttps://splunkbase.splunk.com/app/9812\n\nSee documentation/DEPLOYMENT.md for installation and configuration.\n')
 docs=APP/'documentation'; docs.mkdir(exist_ok=True)
-for name in ['README.md','CONTRIBUTING.md','LICENSE','DEPLOYMENT.md','SOAR_EVENT_CONTRACT.md','BLOCK_OBJECT_WORKFLOW.md','TEAMS_INTEGRATION_REFERENCE.md','CHANGELOG.md']:
+documentation={'README.md','CONTRIBUTING.md','LICENSE','DEPLOYMENT.md','SOAR_EVENT_CONTRACT.md','CHANGELOG.md'}
+for name in sorted(documentation):
     (docs/name).write_bytes((ROOT/name).read_bytes())
 examples=docs/'examples'; examples.mkdir(exist_ok=True)
-for source in (ROOT/'examples').glob('*.json'): (examples/source.name).write_bytes(source.read_bytes())
+for source in (ROOT/'examples').glob('*.json'):
+    (examples/source.name).write_bytes(source.read_bytes())
+    documentation.add('examples/'+source.name)
 
 allowed_roots={'default','metadata','bin','appserver','documentation','static'}
 allowed_suffixes={'.conf','.meta','.py','.xml','.js','.css','.md','.json','.png'}
@@ -44,6 +47,7 @@ files=[]
 for p in sorted(APP.rglob('*')):
     rel=p.relative_to(APP)
     if not p.is_file() or p.is_symlink() or any(part in ['__pycache__','local'] or part.startswith('.') for part in rel.parts): continue
+    if rel.parts[0]=='documentation' and rel.relative_to('documentation').as_posix() not in documentation: continue
     if p.name in ['README.txt','THIRD_PARTY_NOTICES.txt','LICENSE'] or (rel.parts[0] in allowed_roots and p.suffix in allowed_suffixes): files.append(p)
 out=ROOT/'dist'; out.mkdir(exist_ok=True)
 bundle=out/('splunk_actionstack-'+version+'.spl')

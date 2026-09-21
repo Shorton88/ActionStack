@@ -1,125 +1,72 @@
 # SOAR event contract
 
-Status: implemented payloads with local validation and recovery tests. The operator confirmed live intake with an earlier release; the artifact-label change in 0.1.4 is locally tested.
-
-## 1. Delivery boundary
-
-A logical submission consists of one SOAR event/container and its required submission artifact. Success requires both to be confirmed. The event contains the complete typed input; the artifact provides convenient fields for playbook datapaths.
-
-Example files use fictional metadata, the illustrative label `automation_requests`, and container ID `12345`. The adapter replaces generated values and the artifact's container ID at runtime.
+Each submission creates one SOAR container and one submission artifact. Both IDs must be confirmed before delivery is marked complete.
 
 - [Container example](examples/soar-container.json)
-- [Submission artifact example](examples/soar-submission-artifact.json)
+- [Artifact example](examples/soar-submission-artifact.json)
 
-Both examples disable automation for ingestion-only verification.
+## Container data
 
-## 2. Canonical envelope
+The complete request is stored under `container.data.actionstack`.
 
-Store the following under `container.data.actionstack`:
-
-| Field | Source and meaning |
+| Field | Contents |
 | --- | --- |
-| `contract_version` | Version of this envelope |
-| `submission_id` | Server-generated immutable UUID |
-| `submitted_at` | UTC timestamp recorded by the backend |
-| `source` | App identifier and configured originating instance identifier |
-| `form` | Stable ID, title, published version and field-label snapshot |
-| `submitted_by` | Username, effective-role snapshot and optional trusted profile fields |
-| `routing` | Published mapping version, label and tags |
-| `inputs` | Every validated user field, using stable keys and original JSON types |
-| `derived` | Server-computed values such as duration seconds/permanent |
-| `policy` | Server-selected approval requirement; no approval decision |
+| `contract_version` | Envelope version, currently `1` |
+| `submission_id` | Immutable submission UUID |
+| `submitted_at` | UTC submission timestamp |
+| `source` | App ID and configured source instance |
+| `form` | Workspace ID, form ID, title, published version, and field labels |
+| `submitted_by` | Splunk username, effective roles, and available profile fields |
+| `routing` | Mapping revision, SOAR label, and tags |
+| `inputs` | Validated fields with their original JSON types |
+| `derived` | Additional values calculated by a configured mapping, if any |
+| `policy` | Approval requirement for the SOAR playbook |
 
-The example is a Forever domain request. `requested_duration_seconds: null` with `permanent: true` means no requested automatic expiry. `approval_required: true` conveys policy to a downstream playbook.
+Field IDs are the keys in `inputs`. Lookup fields contain the selected values, not their display labels. Multiple-value inputs are arrays. Section headings are not submitted as inputs.
 
-The timestamp describes submission. Actual enforcement time and expiration belong to downstream execution.
+## Artifact data and CEF
 
-Do not include Splunk session keys, SOAR tokens, credentials or raw HTTP authorization headers. Optional email/display name is included only if a trusted user profile supplies it.
+The artifact uses the form's SOAR label. `artifact.data.actionstack.inputs` contains the same typed inputs as the container. Standard metadata is available in CEF:
 
-### Configurable approval rules
+- `actionstack_submission_id`
+- `actionstack_form_id`
+- `actionstack_form_version`
+- `actionstack_submitted_at`
+- `actionstack_submitted_by`
+- `actionstack_approval_required`
+- `actionstack_approval_policy`
 
-Version 0.1.5 adds optional `mapping.approval` to form definitions:
+Each input also receives an `actionstack_<fieldId>` CEF key. CEF values are strings; arrays are encoded as JSON strings. Optional field mappings add standard CEF keys such as `destinationAddress`.
+
+For example, a field named `users` is available as:
+
+- `container.data.actionstack.inputs.users`: `["alice", "bob"]`
+- `artifact.data.actionstack.inputs.users`: `["alice", "bob"]`
+- `artifact:*.cef.actionstack_users`: the JSON string `["alice","bob"]`
+
+## Approvals
+
+The form's approval rules are evaluated on the server after field validation. Rules can require approval for every request, no requests, or requests matching any configured condition.
 
 ```json
-{"mode":"conditional","policy":"soar_playbook","conditions":[{"field":"duration","equals":"forever"}]}
+{"approval_required": true, "approval_policy": "soar_playbook"}
 ```
 
-Modes are `never`, `always`, and `conditional`. Conditional rules require 1–20 conditions; any matching condition requires approval. Other modes have an empty conditions array. Conditions reference dropdown/radio choices or typed checkbox booleans. New requests use `soar_playbook`; legacy `teams_reactions` definitions normalize to that policy. the emitted policy is `none` when approval is unnecessary. Omitting this configuration retains legacy behavior: Forever requires SOAR-playbook approval for the block-object policy, and generic forms require none.
+When approval is unnecessary, the policy is `none`. These fields express a requirement, not a decision. The SOAR playbook performs and enforces approval.
 
-The server validates rules during save/publish and evaluates them against normalized, visible inputs. The existing canonical policy and `actionstack_approval_required` / `actionstack_approval_policy` CEF fields remain the downstream interface. Approval decisions and enforcement remain in SOAR. New publications do not rewrite stored requests or their policy metadata.
+## Delivery and automation
 
-## 3. Artifact projection
+1. Validate the published form, authorization, fields, and lookup selections.
+2. Record the submission and its destination snapshot.
+3. Create the container with `run_automation: false`.
+4. Create the artifact with the container ID and the form's automation setting.
+5. Save both IDs and mark delivery complete.
 
-New submissions in 0.1.4 use the published form's mapping label for both the container and submission artifact, for example `automation_requests`. Requests recorded by earlier versions retain their saved artifact label (`event`) on retry; existing remote artifacts are not relabeled.
+Automatic playbooks are selected by the container label. Enable **Allow SOAR automation on delivery**, publish the form, and configure an active playbook for that label. ActionStack reads playbook status but does not explicitly start playbooks through the run API.
 
-Automatic playbook selection uses the **container label**. Matching artifact labels provide consistent classification and can be used in playbook filters; they are not required for container-label routing. Enable the form's **Allow SOAR automation on delivery** setting and publish when automatic execution is intended, and configure an active SOAR playbook for the container label. [SOAR 8.6 container semantics](https://help.splunk.com/en/splunk-soar/soar-on-premises/python-playbook-api-reference/8.6.0/overview/understanding-containers)
-
-Prefix convenience fields with `actionstack_` to avoid collisions with standard CEF names. Example values in the CEF projection are strings; canonical values retain their types in the container envelope.
-
-Suggested playbook inputs include:
-
-- `artifact:*.cef.actionstack_submission_id`
-- `artifact:*.cef.actionstack_submitted_by`
-- `artifact:*.cef.actionstack_object_type`
-- `artifact:*.cef.actionstack_object_value`
-- `artifact:*.cef.actionstack_hash_type`, for hash requests
-- `artifact:*.cef.actionstack_duration`
-- `artifact:*.cef.actionstack_approval_required`
-
-For standard observable mappings, use `destinationAddress` for the initial IP template, `destinationDnsDomain` for the domain template and `fileHash` for hash input. These are template choices; admins can map fields differently. Include the selected hash algorithm separately. Custom CEF contains types can be added where validated.
-
-In 0.2.0, array inputs remain typed arrays under `container.data.actionstack.inputs` and are also copied to `artifact.data.actionstack.inputs`. CEF `actionstack_<fieldId>` and optional custom CEF mappings contain JSON-encoded strings for arrays. For example, `names` becomes `["Alice", "Bob"]` in custom data; its CEF value is the JSON text of that list. Scalar CEF behavior is unchanged. The artifact data field is a documented JSON object ([Splunk reference](https://help.splunk.com/en/splunk-soar/soar-on-premises/rest-api-reference/8.5.0/artifact-endpoints/rest-artifact)). A submission does not require global SOAR custom-container-field creation for every new form field.
-
-SOAR documents CEF, artifact custom data, source identifiers and explicit automation control on its artifact endpoint. [SOAR 8.6 artifact reference](https://help.splunk.com/en/splunk-soar/soar-on-premises/rest-api-reference/8.6.0/artifact-endpoints/rest-artifact)
-
-## 4. Proposed HTTP sequence
-
-1. Validate published form and current authorization.
-2. Persist submission ID, input/policy snapshot and a pending delivery record.
-3. POST the container to `/rest/container` with `run_automation: false` and no bundled artifacts.
-4. Confirm and persist the returned container ID.
-5. POST the required artifact to `/rest/artifact`, substituting that ID.
-6. Confirm the artifact ID and persist the complete receipt.
-7. Return **Submitted to SOAR** with the submission and event IDs.
-
-In production, the admin's published ingestion setting may enable automation on the final required artifact. Additional artifacts, if configured, must precede that trigger. The app does not call `/rest/playbook_run`.
-
-Container creation returns its ID. Duplicate source-identifier responses can include the matching existing container ID. Source deduplication behavior must be validated for the configured label and optional source asset. [SOAR 8.6 container reference](https://help.splunk.com/en/splunk-soar/soar-on-premises/rest-api-reference/8.6.0/container-endpoints/rest-containers)
-
-Use HTTPS with a trusted CA and a server-held SOAR automation token. Resolve allowed destinations from setup configuration.
-
-## 5. Retry and reconciliation
-
-Use a stable source identifier for each stage:
+Source identifiers are stable across delivery retries:
 
 - Container: `splunk_actionstack:<submission_id>`
-- Submission artifact: `splunk_actionstack:<submission_id>:submission`
+- Artifact: `splunk_actionstack:<submission_id>:submission`
 
-Serialize delivery of the same submission and verify the remote source/envelope before adopting any reported existing ID. Reconcile ambiguous outcomes before retrying. If a container exists and the artifact is absent, resume at artifact creation. Do not repeat a completed artifact stage merely to retrigger automation.
-
-If automation was enabled and a final artifact POST times out, determine whether that artifact exists before sending it again. Event delivery and downstream side-effect deduplication have different guarantees; the latter belongs to the user's playbooks.
-
-A receipt is complete only after every required stage is confirmed. Keep incomplete or uncertain submissions visible to authorized operators.
-
-## 6. Compatibility validation
-
-Validate in the actual on-prem SOAR 8.6 environment:
-
-- Normal event creation and label availability.
-- Namespaced JSON data round-trip, Unicode, booleans, numbers, nulls and arrays.
-- Custom CEF keys and optional contains metadata.
-- Source-identifier duplicate behavior under the configured source asset.
-- Failure after container creation and recovery at artifact creation.
-- Explicit disabled automation during intake testing.
-- Optional final-artifact triggering after a SOAR owner configures an existing playbook.
-
-Validation of these JSON fixtures is not a live integration test.
-
-
-### Workspace and request-validation attribution (0.1.6)
-
-New envelopes include `form.workspace_id` (legacy forms use `security`). When a reusable validation policy is selected, `form.validation_policy` records its `id` and `revision`. The full saved rules remain in the app's immutable form and receipt snapshots. Requests must pass field validation, the saved custom policy, and any lookup selection rechecks before a pending record or SOAR event is created. Approval metadata under `policy` keeps its existing meaning. Historical envelopes and retry payloads are unchanged.
-
-### Field validation (0.2.0)
-
-New and migrated forms store checks on each field and no longer include `form.validation_policy` in their event envelope. Historical policy-based forms retain their saved attribution. Multi-value checks evaluate each item, and selected lookup values are rechecked as one bounded batch before a receipt is recorded. The `policy` envelope member continues to mean downstream approval requirements.
+After an uncertain response, the app checks for matching remote objects before creating them again. Retries use saved payloads; subsequent form edits do not change the original request. Delivery completion does not imply successful playbook execution.

@@ -1,31 +1,32 @@
 {
   "name": "Form submission",
-  "label": "automation_requests",
+  "label": "actionstack_requests",
   "severity": "low",
   "source_data_identifier": "splunk_actionstack:d50ae68a-a570-4f52-a5d6-6cc14b90d5da:submission",
   "run_automation": false,
   "cef": {
     "actionstack_submission_id": "d50ae68a-a570-4f52-a5d6-6cc14b90d5da",
-    "actionstack_form_id": "block-object",
+    "actionstack_form_id": "account-request",
     "actionstack_form_version": "1",
-    "actionstack_submitted_at": "2026-09-15T18:00:00Z",
+    "actionstack_submitted_at": "2026-09-20T12:00:00Z",
     "actionstack_submitted_by": "analyst.example",
     "actionstack_approval_required": "true",
     "actionstack_approval_policy": "soar_playbook",
-    "actionstack_object_type": "hash",
-    "actionstack_hash_type": "sha256",
-    "actionstack_object_value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "actionstack_duration": "forever",
-    "actionstack_reason": "Illustrative intake request",
-    "actionstack_ticket_reference": "INC-1042",
-    "fileHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "actionstack_permanent": "true"
+    "actionstack_users": "[\"alice\", \"bob\"]",
+    "actionstack_reason": "Create accounts for project access"
   },
   "data": {
     "actionstack": {
       "contract_version": 1,
       "submission_id": "d50ae68a-a570-4f52-a5d6-6cc14b90d5da",
-      "projection_version": 1
+      "projection_version": 1,
+      "inputs": {
+        "users": [
+          "alice",
+          "bob"
+        ],
+        "reason": "Create accounts for project access"
+      }
     }
   },
   "container_id": 12345

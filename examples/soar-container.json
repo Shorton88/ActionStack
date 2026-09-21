@@ -1,6 +1,6 @@
 {
-  "name": "Block object request \u00b7 d50ae68a-a570-4f52-a5d6-6cc14b90d5da",
-  "label": "automation_requests",
+  "name": "Account request \u00b7 d50ae68a-a570-4f52-a5d6-6cc14b90d5da",
+  "label": "actionstack_requests",
   "container_type": "default",
   "description": "Submitted through ActionStack by analyst.example",
   "severity": "low",
@@ -8,7 +8,6 @@
   "status": "new",
   "source_data_identifier": "splunk_actionstack:d50ae68a-a570-4f52-a5d6-6cc14b90d5da",
   "tags": [
-    "automation:block_object",
     "source:splunk_actionstack"
   ],
   "run_automation": false,
@@ -16,53 +15,45 @@
     "actionstack": {
       "contract_version": 1,
       "submission_id": "d50ae68a-a570-4f52-a5d6-6cc14b90d5da",
-      "submitted_at": "2026-09-15T18:00:00Z",
+      "submitted_at": "2026-09-20T12:00:00Z",
       "source": {
         "app": "splunk_actionstack",
-        "instance": "Example Splunk SHC"
+        "instance": "Splunk Enterprise"
       },
       "form": {
-        "id": "block-object",
-        "title": "Block an object",
+        "workspace_id": "it",
+        "id": "account-request",
+        "title": "Account request",
         "version": 1,
         "fields": {
-          "object_type": "Object type",
-          "hash_type": "Hash type",
-          "object_value": "Object value",
-          "duration": "Block duration",
-          "reason": "Reason for blocking",
-          "ticket_reference": "Ticket or reference"
+          "users": "Users",
+          "reason": "Reason"
         }
       },
       "submitted_by": {
         "username": "analyst.example",
         "roles": [
           "user",
-          "security_analyst"
+          "as_it_user"
         ],
         "email": "analyst@example.test",
-        "display_name": "Example Analyst"
+        "display_name": "Example User"
       },
       "routing": {
         "mapping_version": 1,
-        "label": "automation_requests",
+        "label": "actionstack_requests",
         "tags": [
-          "automation:block_object",
           "source:splunk_actionstack"
         ]
       },
       "inputs": {
-        "object_type": "hash",
-        "hash_type": "sha256",
-        "object_value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "duration": "forever",
-        "reason": "Illustrative intake request",
-        "ticket_reference": "INC-1042"
+        "users": [
+          "alice",
+          "bob"
+        ],
+        "reason": "Create accounts for project access"
       },
-      "derived": {
-        "requested_duration_seconds": null,
-        "permanent": true
-      },
+      "derived": {},
       "policy": {
         "approval_required": true,
         "approval_policy": "soar_playbook"

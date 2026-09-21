@@ -33,8 +33,7 @@ export function ApprovalRules({
       </div>
       <div className="notice">
         These rules mark the request as requiring approval. Your SOAR playbook
-        must enforce the approval before taking action. The form does not send
-        Teams messages or collect approval decisions.
+        must enforce the approval before taking action.
       </div>
       <label className="field">
         Require approval
@@ -172,8 +171,7 @@ export function ApprovalRules({
         </div>
       )}
       <p className="muted">
-        Approval workflow: handled by the SOAR playbook. Your playbook can use
-        Teams or any other approval channel.
+        Approval workflow: handled by the SOAR playbook.
       </p>
       <p className="muted">
         Publish to apply these rules to new requests. Existing submissions

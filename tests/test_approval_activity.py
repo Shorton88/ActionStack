@@ -6,7 +6,7 @@ from actionstack.core import Error, clone, seed_form, validate_definition, valid
 from actionstack.soar import Soar
 from actionstack.service import Service
 
-def rule(mode='conditional',conditions=None,policy='teams_reactions'):
+def rule(mode='conditional',conditions=None,policy='soar_playbook'):
     return {'mode':mode,'conditions':conditions if conditions is not None else [{'field':'duration','equals':'forever'}] if mode=='conditional' else [],'policy':policy}
 
 class ApprovalTests(unittest.TestCase):

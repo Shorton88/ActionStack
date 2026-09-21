@@ -20,7 +20,7 @@ export type Field = {
 };
 export type ApprovalRule = {
   mode: "never" | "always" | "conditional";
-  policy: "teams_reactions" | "soar_playbook";
+  policy: "soar_playbook";
   conditions: { field: string; equals: string | boolean }[];
 };
 export type Form = {
