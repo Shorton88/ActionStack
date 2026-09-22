@@ -2,7 +2,9 @@ import { Fragment, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { RunCounts } from "./RunCounts";
 import { api } from "./api";
-import type { Activity, RunGroup } from "./types";
+import { ReceiptTimeline } from "./ReceiptTimeline";
+import type { ActivitySnapshot } from "./receipt-audit.js";
+import type { Activity, RunGroup, Submission } from "./types";
 
 function Runs({ title, group }: { title: string; group: RunGroup }) {
   return (
@@ -106,24 +108,23 @@ function Runs({ title, group }: { title: string; group: RunGroup }) {
 }
 
 export function AutomationActivity({
-  id,
-  containerId,
-  enabled,
+  submission,
+  onSnapshot,
 }: {
-  id: string;
-  containerId: number | null;
-  enabled: boolean;
+  submission: Submission;
+  onSnapshot: (snapshot: ActivitySnapshot) => void;
 }) {
+  const { id, container_id: containerId } = submission;
+  const enabled = submission.form.mapping.run_automation;
+  const [view, setView] = useState("grouped");
   const [data, setData] = useState<Activity | null>(null);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(Boolean(containerId));
   const [refresh, setRefresh] = useState(0);
   useEffect(() => {
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
-    setData(null);
-    setError("");
-    setBusy(false);
+
     async function poll() {
       if (stopped || !containerId) return;
       if (!document.hidden) {
@@ -148,6 +149,10 @@ export function AutomationActivity({
       clearTimeout(timer);
     };
   }, [id, containerId, refresh]);
+  useEffect(
+    () => onSnapshot({ data, error, loading: busy }),
+    [data, error, busy, onSnapshot],
+  );
   return (
     <section
       className="automation-activity"
@@ -170,18 +175,37 @@ export function AutomationActivity({
           : "Automatic execution was disabled for this submission."}{" "}
         Event activity includes manual runs and reruns.
       </p>
+      <div className="filter-tabs" aria-label="Receipt activity view">
+        <button
+          aria-pressed={view === "grouped"}
+          className={view === "grouped" ? "selected" : ""}
+          onClick={() => setView("grouped")}
+        >
+          Grouped
+        </button>
+        <button
+          aria-pressed={view === "timeline"}
+          className={view === "timeline" ? "selected" : ""}
+          onClick={() => setView("timeline")}
+        >
+          Timeline
+        </button>
+      </div>
+      {error && (
+        <p role="status" className="activity-error">
+          Status unavailable: {error}
+          {data
+            ? " Displayed activity is from the last successful refresh."
+            : ""}
+        </p>
+      )}
+      {view === "timeline" && (
+        <ReceiptTimeline submission={submission} activity={data} />
+      )}
       {!containerId ? (
         <p className="muted">Waiting for a SOAR event ID.</p>
       ) : (
         <>
-          {error && (
-            <p role="status" className="activity-error">
-              Status unavailable: {error}
-              {data
-                ? " The results below are from the last successful refresh."
-                : ""}
-            </p>
-          )}
           {!data && !error && (
             <p className="muted">
               {busy
@@ -194,9 +218,15 @@ export function AutomationActivity({
               {data.demo && (
                 <p className="muted">Demo mode does not run playbooks.</p>
               )}
-              <Runs title="Playbooks" group={data.playbooks} />
-              <Runs title="Actions" group={data.actions} />
-              {data.blocks && <Runs title="Other blocks" group={data.blocks} />}
+              {view === "grouped" && (
+                <>
+                  <Runs title="Playbooks" group={data.playbooks} />
+                  <Runs title="Actions" group={data.actions} />
+                  {data.blocks && (
+                    <Runs title="Other blocks" group={data.blocks} />
+                  )}
+                </>
+              )}
               <small className="muted">
                 Last checked {new Date(data.checked_at).toLocaleTimeString()} ·
                 Refreshes every 30 seconds while this receipt is visible.

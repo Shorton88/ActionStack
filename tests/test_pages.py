@@ -320,7 +320,7 @@ class AdapterTests(unittest.TestCase):
         with self.assertRaises(Error): Soar({'soar_url':'http://soar.example.test','ignore_certificate_errors':True},'test')
     def test_existing_ca_is_loaded_when_validation_enabled(self):
         context=Mock()
-        with patch('actionstack.soar.ssl.create_default_context',return_value=context):
+        with patch('actionstack.soar.ssl.create_default_context',return_value=context), patch('actionstack.soar.load_system_ca_bundles'):
             self.assertIs(validate_ca('saved-pem',False),context)
         context.load_verify_locations.assert_called_once_with(cadata='saved-pem')
     def test_https_origin_and_ca_required(self):

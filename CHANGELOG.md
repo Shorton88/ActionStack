@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.6
+
+- Load standard Linux CA bundles alongside Python trust defaults for SOAR HTTPS connections. Preserve explicit runtime CA overrides and certificate/hostname verification.
+- Report certificate verification and TLS handshake failures separately from connectivity timeouts.
+- Add optional retention for delivered submissions, disabled by default. Remove receipt data in bounded, cluster-coordinated batches when submissions are listed; retain failed requests, audit entries, and duplicate-prevention markers. SOAR events are unaffected.
+
+## 0.5.5
+
+- Add an optional receipt timeline with submission, delivery, and reported SOAR run updates. Keep records without timestamps separate from dated updates.
+- Export receipts as JSON with submitted fields, the form snapshot, and available SOAR activity, including result limits and refresh errors.
+- Export the filtered submissions list across pages as CSV, including delivery details, submitted fields, export identity, and scope. Spreadsheet formula values are escaped.
+
 ## 0.5.4
 
 - Remove unsupported `local` options from lookup searches and correct the builder guidance. Existing searches using them show instructions to remove the option.

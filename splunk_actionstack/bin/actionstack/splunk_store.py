@@ -28,12 +28,13 @@ class KVStore:
         base='/servicesNS/nobody/'+APP+'/storage/collections/data/actionstack_'+collection
         return base+('/'+quote(key,safe='') if key is not None else '')
     def get(self,collection,key): return self.rest.call('GET',self.path(collection,key))
-    def list(self,collection,query=None):
+    def list(self,collection,query=None,limit=None):
         output=[]; offset=0
         while True:
-            batch=self.rest.call('GET',self.path(collection),params={'query':json.dumps(query or {}),'limit':500,'skip':offset,'sort':'_key:1'})
+            batch=self.rest.call('GET',self.path(collection),params={'query':json.dumps(query or {}),'limit':min(500,limit-len(output)) if limit is not None else 500,'skip':offset,'sort':'_key:1'})
             if batch is None: raise Error(503,'App KV Store collections are missing. Install the full app bundle.')
             output.extend(batch)
+            if limit is not None and len(output)>=limit: return output[:limit]
             if len(batch)<500: return output
             offset+=500
             if offset>=50000: raise Error(503,'Collection size exceeded this release’s limit. Apply the retention runbook.')

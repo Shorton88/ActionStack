@@ -2,9 +2,33 @@
 from .run_activity import counts, run_status, block_rows, utility_rows
 import json
 import ssl
+import os
+import sys
 import re
 from urllib import request, parse, error
 from .core import Error
+
+# Splunk's bundled OpenSSL can use a different default CA path than Linux.
+LINUX_CA_BUNDLES=(
+    '/etc/ssl/certs/ca-certificates.crt',
+    '/etc/pki/tls/certs/ca-bundle.crt',
+    '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem',
+    '/etc/ssl/ca-bundle.pem',
+    '/etc/ssl/cert.pem',
+)
+
+def load_system_ca_bundles(context):
+    if not sys.platform.startswith('linux'): return
+    # Respect explicit runtime CA overrides rather than widening their scope.
+    paths=ssl.get_default_verify_paths()
+    if any(os.environ.get(key) for key in (paths.openssl_cafile_env,paths.openssl_capath_env) if key): return
+    loaded=set()
+    for path in LINUX_CA_BUNDLES:
+        resolved=os.path.realpath(path)
+        if resolved in loaded or not os.path.isfile(path): continue
+        try: context.load_verify_locations(cafile=path)
+        except (OSError,ssl.SSLError): continue
+        loaded.add(resolved)
 
 MAX_RESPONSE=4*1024*1024
 MAX_ACTION_DATA_PREVIEW=16000
@@ -61,6 +85,7 @@ def validate_ca(pem,ignore_certificate_errors=False):
         ctx.verify_mode=ssl.CERT_NONE
         return ctx
     ctx=ssl.create_default_context()
+    load_system_ca_bundles(ctx)
     if pem:
         try: ctx.load_verify_locations(cadata=pem)
         except (ssl.SSLError,ValueError): raise Error(400,'Enter a valid PEM certificate chain.')
@@ -125,7 +150,13 @@ class Soar:
             except (ValueError,UnicodeError): result={}
             if method=='POST' and isinstance(result,dict) and (result.get('existing_container_id') or result.get('existing_artifact_id')): return result
             self.rejected(method,path,exc.code,result)
-        except (error.URLError,TimeoutError,OSError): raise Error(504,f'SOAR delivery could not be confirmed during {method} /rest/{path}. Check connectivity and the CA chain before retrying.')
+        except (error.URLError,TimeoutError,OSError) as exc:
+            reason=exc.reason if isinstance(exc,error.URLError) else exc
+            if isinstance(reason,ssl.SSLCertVerificationError):
+                detail=response_detail({'message':getattr(reason,'verify_message','') or str(reason)},self.token)
+                raise Error(502,'SOAR certificate verification failed on the Splunk search head. '+detail+' Check the CA trust on every search head, the server certificate chain, and that the SOAR URL matches a certificate DNS name or IP SAN.')
+            if isinstance(reason,ssl.SSLError): raise Error(502,'The TLS handshake with SOAR failed. Check the server TLS configuration and certificate chain.')
+            raise Error(504,f'SOAR delivery could not be confirmed during {method} /rest/{path}. Check connectivity before retrying.')
         except (ValueError,UnicodeError): raise Error(502,f'SOAR returned an invalid response during {method} /rest/{path}.')
 
     def labels(self):

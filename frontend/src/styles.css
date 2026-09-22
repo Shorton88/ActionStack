@@ -3812,3 +3812,44 @@
     transition: none;
   }
 }
+
+.actionstack-app .actionstack-receipt-timeline ol {
+  list-style: none;
+  margin: 20px 0 20px 6px;
+  padding: 0 0 0 20px;
+  border-left: 2px solid var(--line);
+}
+.actionstack-app .actionstack-receipt-timeline li {
+  position: relative;
+  padding: 0 0 24px;
+}
+.actionstack-app .actionstack-receipt-timeline li::before {
+  content: "";
+  position: absolute;
+  left: -26px;
+  top: 5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.actionstack-app .actionstack-receipt-timeline li > div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 5px;
+}
+.actionstack-app .actionstack-receipt-timeline b {
+  overflow-wrap: anywhere;
+  min-width: 0;
+  font-size: 14px;
+}
+.actionstack-app .actionstack-receipt-actions {
+  flex-wrap: wrap;
+}
+.actionstack-app .actionstack-timeline-reference {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
