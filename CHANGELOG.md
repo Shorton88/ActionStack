@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.4
+
+- Remove unsupported `local` options from lookup searches and correct the builder guidance. Existing searches using them show instructions to remove the option.
+- Increase builder labels, inputs, and help text, plus submission table and receipt text, for readability.
+- Replace the Scan icon with a targeting reticle and heartbeat line.
+
 ## 0.5.3
 
 - Query simple KV Store lookups directly instead of dispatching search jobs. Preserve SPL execution for transformations, filtered definitions, and multivalue expansion.

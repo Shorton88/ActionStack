@@ -37,23 +37,25 @@ def pipeline(search):
     tokens=parts[0].split()
     names=[]; options={}
     for token in tokens[1:]:
-        option=re.fullmatch(r'(strict|local)=(true|false)',token,re.I)
+        option=re.fullmatch(r'(strict)=(true|false)',token,re.I)
         if option:
             key,val=option[1].lower(),option[2].lower()
-            if key in options or (key=='strict' and val!='true'): raise Error(400,'Use strict=true and at most one local=true or local=false option.')
+            if key in options or val!='true': raise Error(400,'Use strict=true only once, or omit it.')
             options[key]=val
+        elif token.lower().startswith('local='):
+            raise Error(400,'Remove the local option from the lookup search. inputlookup does not support local=true or local=false.')
         elif re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}',token): names.append(token)
-        else: raise Error(400,'Unsupported inputlookup option. Use local=true or local=false.')
+        else: raise Error(400,'Unsupported inputlookup option. Use a lookup name and optional strict=true.')
     if tokens[0].lower()!='inputlookup' or len(names)!=1: raise Error(400,'Start with | inputlookup lookup_name, then add read-only SPL transformations.')
     for part in parts[1:]:
         command=re.match(r'([a-zA-Z]+)(?:\s|$)',part)
         if not command or command[1].lower() not in READ_COMMANDS: raise Error(400,'Unsupported lookup command. Use read-only transformations such as eval, where, table, fields, rename or stats.')
-    parts[0]='inputlookup strict=true '+('local='+options['local']+' ' if 'local' in options else '')+names[0]
+    parts[0]='inputlookup strict=true '+names[0]
     return ' | '.join(parts)
 
 def lookup_fields(config):
     # Older one-column forms keep their existing value/label mapping.
-    legacy=SOURCE.fullmatch('| '+re.sub(r'\b(?:strict|local)=(?:true|false)\s+', '',pipeline(config.get('search','')),flags=re.I))
+    legacy=SOURCE.fullmatch('| '+re.sub(r'\bstrict=true\s+', '',pipeline(config.get('search','')),flags=re.I))
     value=config.get('value_field',legacy[2] if legacy else '')
     label=config.get('label_field',value)
     if not all(isinstance(v,str) and IDENTIFIER.fullmatch(v) for v in [value,label]): raise Error(400,'Choose the result field sent to SOAR and the field displayed as its label.')

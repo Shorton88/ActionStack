@@ -110,7 +110,7 @@
   outline-offset: 1px;
 }
 .actionstack-app small {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
 }
 .sidebar {
@@ -1226,7 +1226,7 @@
 .actionstack-app table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: 13px;
 }
 .actionstack-app th {
   color: #8993a7;
@@ -1253,7 +1253,7 @@
 }
 .actionstack-app td small {
   display: block;
-  font-size: 9px;
+  font-size: 13px;
   margin-top: 4px;
   color: #748097;
 }
@@ -1274,7 +1274,7 @@
   color: #baaccf;
   border-radius: 5px;
   padding: 4px 7px;
-  font-size: 9px !important;
+  font-size: 12px !important;
   font-weight: 400;
   white-space: nowrap;
   letter-spacing: 0;
@@ -1384,7 +1384,7 @@
   gap: 15px;
   border-bottom: 1px solid #292f3a;
   padding: 12px 0;
-  font-size: 11px;
+  font-size: 13px;
 }
 .summary-list > div:last-child {
   border-bottom: 0;
@@ -1411,7 +1411,7 @@
   background: #0d1119;
   border: 1px solid #2b3442;
   border-radius: 7px;
-  font-size: 11px;
+  font-size: 13px;
   color: #b4c2d6;
 }
 .text-button {
@@ -1516,7 +1516,7 @@
   border-radius: 0;
   padding: 12px 0;
   color: #8895aa;
-  font-size: 11px;
+  font-size: 13px;
 }
 .editor-tabs button.selected {
   color: #c7b2e9;
@@ -1524,7 +1524,7 @@
 }
 .editor-grid {
   display: grid;
-  grid-template-columns: 180px minmax(250px, 1fr) 240px;
+  grid-template-columns: 180px minmax(250px, 1fr) 280px;
   border: 1px solid #2e3340;
   border-radius: 9px;
   overflow: hidden;
@@ -1536,10 +1536,10 @@
 }
 .palette h3,
 .properties h3 {
-  font-size: 12px;
+  font-size: 14px;
 }
 .palette > p {
-  font-size: 9px;
+  font-size: 13px;
   color: #7d8a9f;
   margin: 5px 0 20px;
 }
@@ -1553,7 +1553,7 @@
   background: #191e29;
   padding: 10px 9px;
   border-radius: 5px;
-  font-size: 10px;
+  font-size: 13px;
   text-align: left;
   display: flex;
   align-items: center;
@@ -1584,7 +1584,7 @@
   color: #727f96;
 }
 .palette-note p {
-  font-size: 9px;
+  font-size: 13px;
   line-height: 1.7;
 }
 .palette-note svg {
@@ -1598,7 +1598,7 @@
   padding: 17px 20px 26px;
 }
 .canvas-caption {
-  font-size: 8px;
+  font-size: 13px;
   letter-spacing: 1px;
   color: #718097;
   display: flex;
@@ -1635,7 +1635,7 @@
   background: none !important;
   border: 1px solid transparent !important;
   padding: 4px 3px !important;
-  font-size: 10px !important;
+  font-size: 13px !important;
   color: #8592ab !important;
   margin-bottom: 21px;
   resize: vertical;
@@ -1663,7 +1663,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: 13px;
 }
 .canvas-field-label > svg {
   color: #59637a;
@@ -1699,7 +1699,7 @@
   border: 1px solid #2e3745;
   border-radius: 5px;
   padding: 10px;
-  font-size: 9px;
+  font-size: 13px;
   color: #606f89;
 }
 .canvas-placeholder.tall {
@@ -1709,7 +1709,7 @@
   display: flex;
   gap: 5px;
   align-items: center;
-  font-size: 8px !important;
+  font-size: 13px !important;
   color: #ad93c9 !important;
   margin-top: 7px;
 }
@@ -1725,7 +1725,7 @@
   border-radius: 5px;
   background: none;
   color: #ad95cc !important;
-  font-size: 10px !important;
+  font-size: 13px !important;
 }
 .canvas-submit {
   display: flex;
@@ -1735,7 +1735,7 @@
   background: #bfa8e5;
   border-radius: 5px;
   color: #261c32;
-  font-size: 10px;
+  font-size: 13px;
   padding: 10px;
   margin-top: 24px;
   opacity: 0.75;
@@ -1751,19 +1751,19 @@
   margin-bottom: 20px;
 }
 .properties .field {
-  font-size: 10px;
+  font-size: 14px;
   margin-bottom: 17px;
   gap: 6px;
 }
 .properties input,
 .properties textarea,
 .properties select {
-  font-size: 10px !important;
+  font-size: 14px !important;
   padding: 8px !important;
   min-height: 34px !important;
 }
 .properties small {
-  font-size: 8px !important;
+  font-size: 13px !important;
   line-height: 1.65;
 }
 .toggle-row {
@@ -1775,10 +1775,10 @@
   border-top: 1px solid #2a313e;
   border-bottom: 1px solid #2a313e;
   margin: 8px 0 22px;
-  font-size: 11px;
+  font-size: 13px;
 }
 .toggle-row b {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
 }
 .toggle-row small {
@@ -1794,7 +1794,7 @@
   padding: 12px 0;
 }
 .properties .toggle-row b {
-  font-size: 10px;
+  font-size: 13px;
 }
 .property-divider {
   height: 1px;
@@ -1959,7 +1959,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .editor-grid {
-    grid-template-columns: 145px minmax(210px, 1fr) 210px;
+    grid-template-columns: 160px minmax(210px, 1fr) 260px;
   }
   .canvas {
     padding: 15px 12px;
@@ -2061,13 +2061,13 @@
     display: none;
   }
   .editor-grid {
-    grid-template-columns: 120px minmax(180px, 1fr) 190px;
+    grid-template-columns: 130px minmax(160px, 1fr) 220px;
   }
   .palette {
     padding: 16px 9px;
   }
   .palette-grid button {
-    font-size: 9px;
+    font-size: 13px;
     padding: 8px 6px;
     gap: 5px;
   }
@@ -2084,7 +2084,7 @@
     padding: 15px 9px;
   }
   .canvas-field-label {
-    font-size: 9px;
+    font-size: 13px;
   }
   .field-controls {
     gap: 0;
@@ -2273,7 +2273,7 @@
     grid-template-columns: repeat(3, 1fr);
   }
   .palette-grid button {
-    font-size: 10px;
+    font-size: 13px;
   }
   .palette-note {
     display: none;
@@ -2288,15 +2288,15 @@
     padding: 23px;
   }
   .properties .field {
-    font-size: 12px;
+    font-size: 14px;
   }
   .properties input,
   .properties select,
   .properties textarea {
-    font-size: 12px !important;
+    font-size: 14px !important;
   }
   .properties small {
-    font-size: 10px !important;
+    font-size: 13px !important;
   }
   .editor-tabs {
     gap: 14px;
@@ -2304,7 +2304,7 @@
     overflow: auto;
   }
   .editor-tabs button {
-    font-size: 10px;
+    font-size: 13px;
   }
   .builder-intro {
     padding: 20px;
@@ -3784,7 +3784,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 5px;
-  font-size: 11px;
+  font-size: 13px;
 }
 .actionstack-app .actionstack-run-counts > b {
   white-space: nowrap;

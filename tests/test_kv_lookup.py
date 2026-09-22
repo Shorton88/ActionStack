@@ -16,7 +16,7 @@ SCHEMA={'entry':[{'content':{'field.identity':'string','field.display':'string'}
 class KVLookupTests(unittest.TestCase):
     def test_kv_prefix_uses_user_namespace_no_search_job_and_escaped_regex(self):
         rest=Mock(); rest.call.side_effect=[definition(),SCHEMA,[{'identity':'A.b1','display':'Example'}]]
-        config=dict(CONFIG,value_field='identity',label_field='display',search='| inputlookup identities local=true | table identity display')
+        config=dict(CONFIG,value_field='identity',label_field='display',search='| inputlookup identities | table identity display')
         result=LookupSearch(rest,'alice@example.test').search(config,'a.b')
         self.assertEqual(result['options'],[{'value':'A.b1','label':'Example'}])
         self.assertEqual(rest.call.call_count,3)

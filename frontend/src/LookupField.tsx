@@ -27,11 +27,12 @@ export function LookupSettings({
       <label className="field">
         Search
         <textarea
+          rows={4}
           value={c.search}
           onChange={(e) => change({ search: e.target.value })}
         />
         <small>
-          Start with | inputlookup lookup_name (local=true is allowed). Add
+          Start with | inputlookup lookup_name. Add
           read-only SPL such as eval, where, rename, table or stats. Keep both
           result fields in the output. Macros, subsearches and commands that
           write data are not supported.
