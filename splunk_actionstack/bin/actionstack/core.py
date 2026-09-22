@@ -84,7 +84,7 @@ def validate_definition(raw, roles):
         if not isinstance(value, str) or len(value) > limit or (key == 'title' and not value.strip()):
             raise Error(400, 'Invalid form ' + key + '.')
         f[key] = value.strip()
-    f['icon'] = f.get('icon') if f.get('icon') in ['shield','workflow','search','file','globe','zap'] else 'workflow'
+    f['icon'] = f.get('icon') if f.get('icon') in ['shield','workflow','search','file','globe','zap','scan','server','user'] else 'workflow'
     f['accent'] = f.get('accent') if f.get('accent') in ['violet','cyan','rose','mint','amber','indigo','pearl','sunset'] else 'violet'
     f['workspace_id']=f.get('workspace_id','security')
     if not isinstance(f['workspace_id'],str) or not SLUG.fullmatch(f['workspace_id']): raise Error(400,'Choose a valid workspace.')

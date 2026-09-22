@@ -67,6 +67,9 @@ import { FormAppearance, ThemePicker } from "./Appearance";
 import { FormSections } from "./FormSections";
 import { cloneForm } from "./clone-form.js";
 import { ApprovalRules } from "./ApprovalRules";
+import { Disclosure } from "./Disclosure";
+import { RunCounts } from "./RunCounts";
+import { useSubmissionActivity } from "./submission-activity";
 import { AutomationActivity } from "./AutomationActivity";
 import { approvalRequired } from "./approval.js";
 import { version as appVersion } from "../../package.json";
@@ -496,12 +499,29 @@ function App() {
     [workspaceId, setWorkspaceId] = useState("security"),
     [allSubmissions, setSubmissions] = useState<Submission[]>([]),
     [page, setPage] = useState("catalog"),
+    [submissionPage, setSubmissionPage] = useState(1),
     [selected, setSelected] = useState<Form | null>(null),
     [editor, setEditor] = useState<Form | null>(null),
     [detail, setDetail] = useState<Submission | null>(null),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
     [toast, setToast] = useState("");
+  const shellRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) return;
+    const resize = () =>
+      shell.style.setProperty(
+        "--actionstack-host-offset",
+        `${Math.max(0, shell.getBoundingClientRect().top + window.scrollY)}px`,
+      );
+    resize();
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, [loading, ctx?.username]);
+  useEffect(() => {
+    shellRef.current?.querySelector(".main-shell")?.scrollTo(0, 0);
+  }, [page, selected?.id, !!editor]);
   const forms = allForms.filter(
     (f) =>
       workspaceId === "*" || (f.workspace_id || "security") === workspaceId,
@@ -512,6 +532,18 @@ function App() {
         (s.form.workspace_id || "security") === workspaceId) &&
       (!mine || s.submitted_by === ctx?.username),
   );
+  const submissionPages = Math.max(1, Math.ceil(submissions.length / 10));
+  const currentSubmissionPage = Math.min(submissionPage, submissionPages);
+  const pageSubmissions = submissions.slice(
+    (currentSubmissionPage - 1) * 10,
+    currentSubmissionPage * 10,
+  );
+  const submissionActivity = useSubmissionActivity(
+    pageSubmissions.filter((s) => s.container_id).map((s) => s.id),
+    page === "submissions" && !detail,
+    submissionRefresh,
+  );
+  useEffect(() => setSubmissionPage(1), [workspaceId, mine]);
   useEffect(() => {
     if (!ctx) return;
     let stale = false;
@@ -612,7 +644,7 @@ function App() {
       </div>
     );
   return (
-    <div className="actionstack-app" data-theme={resolvedTheme}>
+    <div className="actionstack-app" data-theme={resolvedTheme} ref={shellRef}>
       <aside className="sidebar">
         <a
           className="brand"
@@ -903,7 +935,7 @@ function App() {
               </div>
               <p className="muted actionstack-submission-note">
                 Showing up to 200 recent submissions you have permission to
-                view.
+                view. Run counts refresh every 30 seconds for this page.
               </p>
               <div className="stat-row">
                 <div>
@@ -948,11 +980,13 @@ function App() {
                         <th>Submitted</th>
                         <th>Submitted by</th>
                         <th>SOAR event</th>
+                        <th>Playbooks</th>
+                        <th>Actions</th>
                         <th />
                       </tr>
                     </thead>
                     <tbody>
-                      {submissions.map((s) => (
+                      {pageSubmissions.map((s) => (
                         <tr key={s.id} onClick={() => setDetail(s)}>
                           <td>
                             <button
@@ -974,12 +1008,53 @@ function App() {
                             {s.container_id ? "#" + s.container_id : "—"}
                           </td>
                           <td>
+                            {s.container_id ? (
+                              <RunCounts
+                                group={submissionActivity[s.id]?.playbooks}
+                                label="Playbooks"
+                              />
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td>
+                            {s.container_id ? (
+                              <RunCounts
+                                group={submissionActivity[s.id]?.actions}
+                                label="Actions"
+                              />
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td>
                             <ChevronRight size={16} />
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                  <div className="actionstack-catalog-pagination">
+                    <Button
+                      disabled={currentSubmissionPage <= 1}
+                      onClick={() =>
+                        setSubmissionPage(currentSubmissionPage - 1)
+                      }
+                    >
+                      Previous
+                    </Button>
+                    <span>
+                      Page {currentSubmissionPage} of {submissionPages}
+                    </span>
+                    <Button
+                      disabled={currentSubmissionPage >= submissionPages}
+                      onClick={() =>
+                        setSubmissionPage(currentSubmissionPage + 1)
+                      }
+                    >
+                      Next
+                    </Button>
+                  </div>
                 </div>
               )}
             </>
@@ -1566,7 +1641,7 @@ function Builder({
         tags: ["source:splunk_actionstack"],
         severity: "low",
         sensitivity: "amber",
-        run_automation: false,
+        run_automation: true,
         title_prefix: "Form submission",
       },
       access: workspace.default_access
@@ -1936,38 +2011,54 @@ function Builder({
           <aside className="palette">
             <h3>Add a field</h3>
             <p>The building blocks of your form.</p>
-            <div className="palette-grid">
-              {fieldTypes.map(([type, label]) => (
-                <button key={type} onClick={() => add(type)}>
-                  <span>
-                    {
-                      (
-                        {
-                          lookup: "⌕",
-                          lookup_multi: "⌕+",
-                          text_list: "T+",
-                          text: "T",
-                          textarea: "☰",
-                          select: "⌄",
-                          number: "#",
-                          email: "@",
-                          url: "↗",
-                          date: "▦",
-                          datetime: "◷",
-                          section: "▬",
-                          static_text: "¶",
-                          checkbox: "☑",
-                          radio: "◉",
-                          multiselect: "☷",
-                        } as Record<string, string>
-                      )[type]
-                    }
-                  </span>
-                  {label}
-                  <Plus size={12} />
-                </button>
-              ))}
-            </div>
+            {[
+              ["Text & numbers", ["text", "textarea", "text_list", "number"]],
+              ["Lookup inputs", ["lookup", "lookup_multi"]],
+              ["Choices", ["select", "multiselect", "radio", "checkbox"]],
+              ["Dates & contact", ["email", "url", "date", "datetime"]],
+              ["Layout & messages", ["section", "static_text"]],
+            ].map(([heading, types]) => (
+              <Disclosure
+                key={String(heading)}
+                title={String(heading)}
+                initiallyOpen={heading === "Text & numbers"}
+              >
+                <div className="palette-grid">
+                  {fieldTypes
+                    .filter(([type]) => types.includes(type))
+                    .map(([type, label]) => (
+                      <button key={type} onClick={() => add(type)}>
+                        <span>
+                          {
+                            (
+                              {
+                                lookup: "⌕",
+                                lookup_multi: "⌕+",
+                                text_list: "T+",
+                                text: "T",
+                                textarea: "☰",
+                                select: "⌄",
+                                number: "#",
+                                email: "@",
+                                url: "↗",
+                                date: "▦",
+                                datetime: "◷",
+                                section: "▬",
+                                static_text: "¶",
+                                checkbox: "☑",
+                                radio: "◉",
+                                multiselect: "☷",
+                              } as Record<string, string>
+                            )[type]
+                          }
+                        </span>
+                        {label}
+                        <Plus size={12} />
+                      </button>
+                    ))}
+                </div>
+              </Disclosure>
+            ))}
             <div className="palette-note">
               <GripVertical size={16} />
               <p>Drag fields to reorder, or use the arrow controls.</p>
@@ -2128,337 +2219,365 @@ function Builder({
               )}
             </div>
             {field && (
-              <>
-                <label className="field">
-                  {field.type === "static_text" ? "Heading" : "Label"}
-                  <input
-                    value={field.label}
-                    onChange={(e) => fieldUpdate({ label: e.target.value })}
-                  />
-                </label>
-                <label className="field">
-                  Field key
-                  <input
-                    className="mono"
-                    value={field.key}
-                    onChange={(e) => fieldUpdate({ key: e.target.value })}
-                  />
-                  <small>
-                    {field.type === "static_text"
-                      ? "Identifier for this text item. It is not sent to SOAR."
-                      : "Stable identifier used in SOAR."}
-                  </small>
-                </label>
-                <label className="field">
-                  Field type
-                  <select
-                    value={field.type}
-                    onChange={(e) =>
-                      fieldUpdate({
-                        type: e.target.value,
-                        default: undefined,
-                        collapsed:
-                          e.target.value === "section" ? false : undefined,
-                        validation: ["section", "static_text"].includes(
-                          e.target.value,
-                        )
-                          ? []
-                          : field.validation,
-                        tone:
-                          e.target.value === "static_text" ? "text" : undefined,
-                        ...(e.target.value === "static_text"
-                          ? {
-                              required: false,
-                              required_when: undefined,
-                              cef_key: undefined,
-                              options: undefined,
-                              placeholder: undefined,
-                              min: undefined,
-                              max: undefined,
-                              min_length: undefined,
-                              max_length: undefined,
-                            }
-                          : {}),
-                        lookup: ["lookup", "lookup_multi"].includes(
-                          e.target.value,
-                        )
-                          ? field.lookup || { ...defaultLookup }
-                          : undefined,
-                        ...(["select", "radio", "multiselect"].includes(
-                          e.target.value,
-                        ) && !field.options
-                          ? {
-                              options: [
-                                { value: "option_1", label: "Option 1" },
-                              ],
-                            }
-                          : {}),
-                      })
-                    }
-                  >
-                    {fieldTypes.map(([v, l]) => (
-                      <option key={v} value={v}>
-                        {l}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {field.type === "static_text" && (
+              <div key={selected}>
+                <Disclosure title="Basics" initiallyOpen>
                   <label className="field">
-                    Style
-                    <select
-                      value={field.tone || "text"}
-                      onChange={(e) =>
-                        fieldUpdate({ tone: e.target.value as Field["tone"] })
-                      }
-                    >
-                      <option value="text">Plain text</option>
-                      <option value="info">Information</option>
-                      <option value="warning">Warning</option>
-                    </select>
+                    {field.type === "static_text" ? "Heading" : "Label"}
+                    <input
+                      value={field.label}
+                      onChange={(e) => fieldUpdate({ label: e.target.value })}
+                    />
+                  </label>
+                  <label className="field">
+                    Field key
+                    <input
+                      className="mono"
+                      value={field.key}
+                      onChange={(e) => fieldUpdate({ key: e.target.value })}
+                    />
                     <small>
-                      Display-only content. Use Show condition below for a
-                      conditional warning.
+                      {field.type === "static_text"
+                        ? "Identifier for this text item. It is not sent to SOAR."
+                        : "Stable identifier used in SOAR."}
                     </small>
                   </label>
-                )}
-                {field.type === "section" && (
-                  <label className="toggle-row">
-                    <div>
-                      <b>Collapsed by default</b>
-                      <small>
-                        Groups the fields below until the next section. Users
-                        can expand it; validation still applies.
-                      </small>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={!!field.collapsed}
+                  <label className="field">
+                    Field type
+                    <select
+                      value={field.type}
                       onChange={(e) =>
-                        fieldUpdate({ collapsed: e.target.checked })
-                      }
-                    />
-                  </label>
-                )}
-                {["lookup", "lookup_multi"].includes(field.type) && (
-                  <LookupSettings field={field} onChange={fieldUpdate} />
-                )}
-                {!["section", "static_text"].includes(field.type) && (
-                  <label className="toggle-row">
-                    <div>
-                      <b>Required field</b>
-                      <small>A response is needed to submit.</small>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={!!field.required}
-                      onChange={(e) =>
-                        fieldUpdate({ required: e.target.checked })
-                      }
-                    />
-                  </label>
-                )}
-                {field.required_when?.map((condition, i) => (
-                  <div className="notice" key={i}>
-                    <span>
-                      Required when {condition.field} ={" "}
-                      {String(condition.equals)}
-                    </span>
-                    <button
-                      type="button"
-                      className="button"
-                      onClick={() =>
                         fieldUpdate({
-                          required_when: field.required_when?.filter(
-                            (_, n) => n !== i,
-                          ),
+                          type: e.target.value,
+                          default: undefined,
+                          collapsed:
+                            e.target.value === "section" ? false : undefined,
+                          validation: ["section", "static_text"].includes(
+                            e.target.value,
+                          )
+                            ? []
+                            : field.validation,
+                          tone:
+                            e.target.value === "static_text"
+                              ? "text"
+                              : undefined,
+                          ...(e.target.value === "static_text"
+                            ? {
+                                required: false,
+                                required_when: undefined,
+                                cef_key: undefined,
+                                options: undefined,
+                                placeholder: undefined,
+                                min: undefined,
+                                max: undefined,
+                                min_length: undefined,
+                                max_length: undefined,
+                              }
+                            : {}),
+                          lookup: ["lookup", "lookup_multi"].includes(
+                            e.target.value,
+                          )
+                            ? field.lookup || { ...defaultLookup }
+                            : undefined,
+                          ...(["select", "radio", "multiselect"].includes(
+                            e.target.value,
+                          ) && !field.options
+                            ? {
+                                options: [
+                                  { value: "option_1", label: "Option 1" },
+                                ],
+                              }
+                            : {}),
                         })
                       }
                     >
-                      Remove condition
-                    </button>
-                  </div>
-                ))}
-                {field.type !== "static_text" && (
+                      {fieldTypes.map(([v, l]) => (
+                        <option key={v} value={v}>
+                          {l}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </Disclosure>
+                <Disclosure title="Input settings" initiallyOpen>
+                  {field.type === "static_text" && (
+                    <label className="field">
+                      Style
+                      <select
+                        value={field.tone || "text"}
+                        onChange={(e) =>
+                          fieldUpdate({ tone: e.target.value as Field["tone"] })
+                        }
+                      >
+                        <option value="text">Plain text</option>
+                        <option value="info">Information</option>
+                        <option value="warning">Warning</option>
+                      </select>
+                      <small>
+                        Display-only content. Use Show condition below for a
+                        conditional warning.
+                      </small>
+                    </label>
+                  )}
+                  {field.type === "section" && (
+                    <label className="toggle-row">
+                      <div>
+                        <b>Collapsed by default</b>
+                        <small>
+                          Groups the fields below until the next section. Users
+                          can expand it; validation still applies.
+                        </small>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={!!field.collapsed}
+                        onChange={(e) =>
+                          fieldUpdate({ collapsed: e.target.checked })
+                        }
+                      />
+                    </label>
+                  )}
+
+                  {!["section", "static_text"].includes(field.type) && (
+                    <label className="toggle-row">
+                      <div>
+                        <b>Required field</b>
+                        <small>A response is needed to submit.</small>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={!!field.required}
+                        onChange={(e) =>
+                          fieldUpdate({ required: e.target.checked })
+                        }
+                      />
+                    </label>
+                  )}
+                  {field.required_when?.map((condition, i) => (
+                    <div className="notice" key={i}>
+                      <span>
+                        Required when {condition.field} ={" "}
+                        {String(condition.equals)}
+                      </span>
+                      <button
+                        type="button"
+                        className="button"
+                        onClick={() =>
+                          fieldUpdate({
+                            required_when: field.required_when?.filter(
+                              (_, n) => n !== i,
+                            ),
+                          })
+                        }
+                      >
+                        Remove condition
+                      </button>
+                    </div>
+                  ))}
+                  {field.type !== "static_text" && (
+                    <label className="field">
+                      Placeholder
+                      <input
+                        value={field.placeholder || ""}
+                        onChange={(e) =>
+                          fieldUpdate({ placeholder: e.target.value })
+                        }
+                      />
+                    </label>
+                  )}
                   <label className="field">
-                    Placeholder
-                    <input
-                      value={field.placeholder || ""}
-                      onChange={(e) =>
-                        fieldUpdate({ placeholder: e.target.value })
-                      }
+                    {field.type === "static_text" ? "Message" : "Helper text"}
+                    <textarea
+                      rows={2}
+                      value={field.help || ""}
+                      onChange={(e) => fieldUpdate({ help: e.target.value })}
                     />
                   </label>
+                  {["select", "radio", "multiselect"].includes(field.type) && (
+                    <label className="field">
+                      Options
+                      <BufferedText
+                        key={selected + "-options"}
+                        multiline
+                        className="mono"
+                        rows={5}
+                        value={(field.options || [])
+                          .map((o) => o.value + " | " + o.label)
+                          .join("\n")}
+                        onCommit={(value) =>
+                          fieldUpdate({
+                            options: value
+                              .split("\n")
+                              .filter((line) => line.trim())
+                              .map((line) => {
+                                const [value, ...label] = line.split("|");
+                                return {
+                                  value: value.trim(),
+                                  label: label.join("|").trim() || value.trim(),
+                                };
+                              }),
+                          })
+                        }
+                      />
+                      <small>One value | label per line.</small>
+                    </label>
+                  )}
+                  {["text", "textarea", "email", "url"].includes(
+                    field.type,
+                  ) && (
+                    <label className="field">
+                      Maximum length
+                      <input
+                        type="number"
+                        value={field.max_length ?? ""}
+                        onChange={(e) =>
+                          fieldUpdate({
+                            max_length: e.target.value
+                              ? Number(e.target.value)
+                              : undefined,
+                          })
+                        }
+                      />
+                    </label>
+                  )}
+                  {field.type === "number" && (
+                    <div className="two-column">
+                      {(["min", "max"] as const).map((k) => (
+                        <label className="field" key={k}>
+                          {k === "min" ? "Minimum" : "Maximum"}
+                          <input
+                            type="number"
+                            value={field[k] ?? ""}
+                            onChange={(e) =>
+                              fieldUpdate({
+                                [k]: e.target.value
+                                  ? Number(e.target.value)
+                                  : undefined,
+                              })
+                            }
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {![
+                    "multiselect",
+                    "section",
+                    "static_text",
+                    "text_list",
+                    "lookup_multi",
+                  ].includes(field.type) && (
+                    <label className="field">
+                      Default value
+                      <input
+                        value={
+                          field.default === undefined
+                            ? ""
+                            : String(field.default)
+                        }
+                        onChange={(e) =>
+                          fieldUpdate({
+                            default:
+                              e.target.value === ""
+                                ? undefined
+                                : field.type === "number"
+                                  ? Number(e.target.value)
+                                  : field.type === "checkbox"
+                                    ? e.target.value === "true"
+                                    : e.target.value,
+                          })
+                        }
+                      />
+                      <small>
+                        {field.type === "checkbox"
+                          ? "Use true or false."
+                          : "Optional initial value."}
+                      </small>
+                    </label>
+                  )}
+                </Disclosure>
+                {["lookup", "lookup_multi"].includes(field.type) && (
+                  <Disclosure title="Lookup source" initiallyOpen>
+                    <LookupSettings field={field} onChange={fieldUpdate} />
+                  </Disclosure>
                 )}
-                <label className="field">
-                  {field.type === "static_text" ? "Message" : "Helper text"}
-                  <textarea
-                    rows={2}
-                    value={field.help || ""}
-                    onChange={(e) => fieldUpdate({ help: e.target.value })}
-                  />
-                </label>
-                {["select", "radio", "multiselect"].includes(field.type) && (
-                  <label className="field">
-                    Options
-                    <BufferedText
-                      key={selected + "-options"}
-                      multiline
-                      className="mono"
-                      rows={5}
-                      value={(field.options || [])
-                        .map((o) => o.value + " | " + o.label)
-                        .join("\n")}
-                      onCommit={(value) =>
-                        fieldUpdate({
-                          options: value
-                            .split("\n")
-                            .filter((line) => line.trim())
-                            .map((line) => {
-                              const [value, ...label] = line.split("|");
-                              return {
-                                value: value.trim(),
-                                label: label.join("|").trim() || value.trim(),
-                              };
-                            }),
-                        })
-                      }
-                    />
-                    <small>One value | label per line.</small>
-                  </label>
+                {!["section", "static_text"].includes(field.type) && (
+                  <Disclosure
+                    title={`Validation${field.validation?.length ? ` (${field.validation.length})` : ""}`}
+                  >
+                    <FieldValidation field={field} onChange={fieldUpdate} />
+                  </Disclosure>
                 )}
-                {["text", "textarea", "email", "url"].includes(field.type) && (
+                <Disclosure
+                  title={
+                    field.show_when ? "Visibility · conditional" : "Visibility"
+                  }
+                >
                   <label className="field">
-                    Maximum length
-                    <input
-                      type="number"
-                      value={field.max_length ?? ""}
+                    Show condition
+                    <select
+                      value={field.show_when?.field || ""}
                       onChange={(e) =>
                         fieldUpdate({
-                          max_length: e.target.value
-                            ? Number(e.target.value)
+                          show_when: e.target.value
+                            ? { field: e.target.value, equals: "" }
                             : undefined,
                         })
                       }
-                    />
+                    >
+                      <option value="">Always show</option>
+                      {editor.fields
+                        .slice(0, selected)
+                        .filter(
+                          (f) => !["section", "static_text"].includes(f.type),
+                        )
+                        .map((f) => (
+                          <option key={f.key} value={f.key}>
+                            {f.label}
+                          </option>
+                        ))}
+                    </select>
                   </label>
-                )}
-                {field.type === "number" && (
-                  <div className="two-column">
-                    {(["min", "max"] as const).map((k) => (
-                      <label className="field" key={k}>
-                        {k === "min" ? "Minimum" : "Maximum"}
-                        <input
-                          type="number"
-                          value={field[k] ?? ""}
-                          onChange={(e) =>
-                            fieldUpdate({
-                              [k]: e.target.value
-                                ? Number(e.target.value)
-                                : undefined,
-                            })
-                          }
-                        />
-                      </label>
-                    ))}
-                  </div>
-                )}
-                {![
-                  "multiselect",
-                  "section",
-                  "static_text",
-                  "text_list",
-                  "lookup_multi",
-                ].includes(field.type) && (
-                  <label className="field">
-                    Default value
-                    <input
-                      value={
-                        field.default === undefined ? "" : String(field.default)
-                      }
-                      onChange={(e) =>
-                        fieldUpdate({
-                          default:
-                            e.target.value === ""
-                              ? undefined
-                              : field.type === "number"
-                                ? Number(e.target.value)
-                                : field.type === "checkbox"
+                  {field.show_when && (
+                    <label className="field">
+                      Equals
+                      <input
+                        value={String(field.show_when.equals)}
+                        onChange={(e) => {
+                          const controller = editor.fields.find(
+                            (f) => f.key === field.show_when!.field,
+                          );
+                          fieldUpdate({
+                            show_when: {
+                              field: field.show_when!.field,
+                              equals:
+                                controller?.type === "checkbox"
                                   ? e.target.value === "true"
-                                  : e.target.value,
-                        })
-                      }
-                    />
-                    <small>
-                      {field.type === "checkbox"
-                        ? "Use true or false."
-                        : "Optional initial value."}
-                    </small>
-                  </label>
+                                  : controller?.type === "number"
+                                    ? Number(e.target.value)
+                                    : e.target.value,
+                            },
+                          });
+                        }}
+                      />
+                    </label>
+                  )}
+                </Disclosure>
+                {!["static_text", "section"].includes(field.type) && (
+                  <Disclosure title="SOAR field mapping">
+                    <label className="field">
+                      Optional CEF mapping
+                      <input
+                        className="mono"
+                        placeholder="e.g. destinationAddress"
+                        value={field.cef_key || ""}
+                        onChange={(e) =>
+                          fieldUpdate({ cef_key: e.target.value })
+                        }
+                      />
+                    </label>
+                  </Disclosure>
                 )}
-                <FieldValidation field={field} onChange={fieldUpdate} />
-                <div className="property-divider" />
-                <label className="field">
-                  Show condition
-                  <select
-                    value={field.show_when?.field || ""}
-                    onChange={(e) =>
-                      fieldUpdate({
-                        show_when: e.target.value
-                          ? { field: e.target.value, equals: "" }
-                          : undefined,
-                      })
-                    }
-                  >
-                    <option value="">Always show</option>
-                    {editor.fields
-                      .slice(0, selected)
-                      .filter(
-                        (f) => !["section", "static_text"].includes(f.type),
-                      )
-                      .map((f) => (
-                        <option key={f.key} value={f.key}>
-                          {f.label}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                {field.show_when && (
-                  <label className="field">
-                    Equals
-                    <input
-                      value={String(field.show_when.equals)}
-                      onChange={(e) => {
-                        const controller = editor.fields.find(
-                          (f) => f.key === field.show_when!.field,
-                        );
-                        fieldUpdate({
-                          show_when: {
-                            field: field.show_when!.field,
-                            equals:
-                              controller?.type === "checkbox"
-                                ? e.target.value === "true"
-                                : controller?.type === "number"
-                                  ? Number(e.target.value)
-                                  : e.target.value,
-                          },
-                        });
-                      }}
-                    />
-                  </label>
-                )}
-                {field.type !== "static_text" && (
-                  <label className="field">
-                    Optional CEF mapping
-                    <input
-                      className="mono"
-                      placeholder="e.g. destinationAddress"
-                      value={field.cef_key || ""}
-                      onChange={(e) => fieldUpdate({ cef_key: e.target.value })}
-                    />
-                  </label>
-                )}
-              </>
+              </div>
             )}
           </aside>
         </div>

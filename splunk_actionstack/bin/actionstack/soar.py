@@ -1,4 +1,5 @@
 """SOAR 8.6 HTTPS adapter. Creates events/artifacts only; no playbook invocation."""
+from .run_activity import counts, run_status, block_rows, utility_rows
 import json
 import ssl
 import re
@@ -134,10 +135,10 @@ class Soar:
             raise Error(502,'SOAR returned unexpected container options.')
         return sorted(set(result['label']))
 
-    def activity(self,container_id):
+    def activity(self,container_id,details=True):
         """Event-scoped status with bounded summaries and action data previews."""
         if type(container_id) is not int or container_id<=0: raise Error(400,'Invalid SOAR event ID.')
-        output={}
+        output={}; reports={}
         for key,endpoint,limit in [('playbooks','playbook_run',25),('actions','action_run',100)]:
             try:
                 result=self.call('GET',endpoint,query={'_filter_container':container_id,'page':0,'page_size':limit,'sort':'id','order':'desc','pretty':''})
@@ -152,17 +153,18 @@ class Soar:
                         if not isinstance(value,str): return None
                         return re.sub(r'[\x00-\x1f\x7f]+',' ',value.replace(self.token,'[redacted]') if self.token else value)[:limit]
                     pb=row.get('playbook')
-                    name=(row.get('_pretty_playbook') or ('Playbook #'+str(pb) if type(pb) is int else 'Playbook')) if key=='playbooks' else (row.get('action') or row.get('name') or 'Action')
+                    name=(row.get('_pretty_playbook') or ('Playbook #'+str(pb) if type(pb) is int else 'Playbook')) if key=='playbooks' else (row.get('name') or row.get('action') or 'Action')
                     status=row.get('status')
                     if row.get('cancelled'): status='cancelled'
-                    if status not in ['pending','running','success','failed','cancelled']: status='unknown'
-                    rows.append({'id':row['id'],'name':safe(name) or 'Unnamed run','status':status,'playbook_run_id':row.get('playbook_run') if type(row.get('playbook_run')) is int else None,'updated_at':safe(row.get('update_time'),60)})
+                    status=run_status(status)
+                    if key=='playbooks' and details: reports[row['id']]=row.get('message')
+                    rows.append({'id':row['id'],'name':safe(name) or 'Unnamed run','status':status,'action':safe(row.get('action')) if key=='actions' else None,'playbook_run_id':row.get('playbook_run') if type(row.get('playbook_run')) is int else None,'updated_at':safe(row.get('update_time'),60)})
                 output[key]={'items':rows,'total':count,'truncated':count>len(rows),'error':None}
             except Error as exc:
                 reason='The SOAR identity cannot read these runs.' if exc.status==403 else 'SOAR run status is unavailable. Check the connection and run-read permissions.'
                 output[key]={'items':[],'total':None,'truncated':False,'error':reason}
         actions=output['actions']
-        if actions['items']:
+        if details and actions['items']:
             try:
                 summaries=self.action_summaries(container_id)
                 for row in actions['items']:
@@ -170,6 +172,26 @@ class Soar:
                 actions['summary_truncated']=summaries['truncated']
             except Error:
                 actions['summary_error']='Action results are unavailable. Check SOAR app-run read permissions.'
+        for group in output.values(): group['counts']=counts(group)
+        if details:
+            blocks=[]; unavailable=False; limited=output['playbooks']['truncated'] or len(reports)>3
+            old_timeout=self.timeout
+            try:
+                self.timeout=min(self.timeout,3)
+                for run in output['playbooks']['items'][:3]:
+                    blocks.extend(utility_rows(reports.get(run['id']),run['id'],self.token))
+                    try:
+                        result=self.call('GET','playbook_run/'+str(run['id'])+'/block_results')
+                        if not isinstance(result,dict) or not isinstance(result.get('block_results'),dict): raise Error(502,'Unexpected block results.')
+                        raw=result['block_results']
+                        projected=block_rows(raw,run['id'],self.token)
+                        limited=limited or len(raw)>1000 or len(projected)>=100
+                        blocks.extend(projected)
+                    except Error: unavailable=True
+            finally: self.timeout=old_timeout
+            output['blocks']={'items':blocks,'total':len(blocks),'truncated':limited,'error':None,
+                'notice':'Only blocks with results reported by SOAR are listed. Utility blocks appear when SOAR includes their run headers. An unreported status is shown as Unknown.',
+                'summary_error':'Some block results are unavailable. Check SOAR permissions and version support.' if unavailable or output['playbooks']['error'] else None}
         return output
 
     def action_summaries(self,container_id):

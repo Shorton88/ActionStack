@@ -64,8 +64,12 @@ class ActivityAdapterTests(unittest.TestCase):
         self.assertEqual(result['actions']['items'][0]['name'],'block ip')
         self.assertNotIn('private',json.dumps(result))
         for call in self.remote.call.call_args_list:
-            self.assertEqual(call.args[0],'GET'); self.assertEqual(call.kwargs['query']['_filter_container'],17)
-            self.assertNotIn('include_expensive',call.kwargs['query'])
+            self.assertEqual(call.args[0],'GET')
+            if call.args[1].endswith('/block_results'):
+                self.assertEqual(call.args[1],'playbook_run/4/block_results')
+            else:
+                self.assertEqual(call.kwargs['query']['_filter_container'],17)
+                self.assertNotIn('include_expensive',call.kwargs['query'])
     def test_foreign_or_malformed_rows_fail_closed(self):
         for raw in [dict(self.row(),container=18),dict(self.row(),id=True),None]:
             self.remote.call=Mock(return_value={'count':1,'data':[raw]})

@@ -13,3 +13,8 @@ test('lists enforce the total and per-item limits without changing existing valu
   assert.throws(() => mergeValues(existing, 'x'.repeat(201)), /200 characters/);
   assert.equal(existing.length, 24);
 });
+
+test('lookup lists deduplicate ignoring case while retaining stored casing', () => {
+  assert.deepEqual(mergeValues(['Alice'], 'ALICE,alice,Bob,BOB', true), ['Alice', 'Bob']);
+  assert.deepEqual(mergeValues([], 'Alice,alice'), ['Alice', 'alice']);
+});

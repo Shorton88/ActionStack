@@ -129,13 +129,13 @@ class LifecycleTests(unittest.TestCase):
 class BatchLookupTests(unittest.TestCase):
     def test_quoted_batch_spl_and_limits(self):
         spl,_=lookup_spl(CONFIG,['alice','bob" | delete'],True)
-        self.assertIn(' OR ',spl);self.assertIn('head 2',spl);self.assertIn('bob\\" | delete',spl)
+        self.assertIn(' OR ',spl);self.assertIn('head 251',spl);self.assertIn('bob\\" | delete',spl)
         for term in [[],['a']*26,['a`b'],['x\n']]:
             with self.assertRaises(Error):lookup_spl(CONFIG,term,True)
         with self.assertRaises(Error):lookup_spl(CONFIG,['alice'],False)
     def test_batch_adapter_returns_only_exact_selected_values(self):
-        rest=Mock();rest.call.side_effect=[{'sid':'123'}, {'entry':[{'content':{'isDone':True}}]}, {'results':[{'identity':'alice'},{'identity':'bob'},{'identity':'foreign'}]},{}]
+        rest=Mock();rest.call.side_effect=[None,{'sid':'123'}, {'entry':[{'content':{'isDone':True}}]}, {'results':[{'identity':'alice'},{'identity':'bob'},{'identity':'foreign'}]},{}]
         result=LookupSearch(rest,'alice').search(CONFIG,['alice','bob'],True)
         self.assertEqual([x['value'] for x in result['options']],['alice','bob'])
-        self.assertEqual(rest.call.call_args_list[2].kwargs['params']['count'],2)
+        self.assertEqual(rest.call.call_args_list[3].kwargs['params']['count'],251)
         self.assertEqual(rest.call.call_args_list[-1].args[0],'DELETE')

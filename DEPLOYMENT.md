@@ -47,11 +47,11 @@ The integration uses SOAR's REST APIs. SOAR Cloud exposes the same intake APIs, 
 
 ## Forms and automation
 
-Use **Form builder** to add fields, validation, lookup searches, sections, and access rules. **Preview → Test validation** checks the form without creating a SOAR event. Save a draft while editing; publish to apply changes to new submissions.
+Use **Form builder** to add fields, validation, lookup searches, sections, and access rules. Field types and settings are grouped into collapsible sections. **Preview → Test validation** checks the form without creating a SOAR event. Save a draft while editing; publish to apply changes to new submissions.
 
 **Static text** adds a heading and message without collecting input. Choose plain text for section descriptions, or Information or Warning for a callout. Use **Show condition** to display it when an earlier field has a particular value. Line breaks are preserved; HTML is displayed as text. Static text is not included in submitted inputs or SOAR field mappings.
 
-Under **SOAR mapping**, choose a label, tags, and optional CEF mappings. **Allow SOAR automation on delivery** permits automation on the final submission artifact. Configure an active SOAR playbook for the container label. Delivery success means the event and artifact were created; execution status is shown separately.
+Under **SOAR mapping**, choose a label, tags, and optional CEF mappings. **Allow SOAR automation on delivery** starts enabled for new forms and permits automation on the final submission artifact. Existing and cloned forms keep their saved setting. Configure an active SOAR playbook for the container label. Delivery success means the event and artifact were created; execution status is shown separately.
 
 The **Approvals** tab marks requests that require approval. The SOAR playbook must enforce that requirement before performing actions. ActionStack does not collect approval decisions.
 
@@ -59,7 +59,7 @@ The **Approvals** tab marks requests that require approval. The SOAR playbook mu
 
 ## Lookup fields
 
-Single-value and multiple-value lookup fields run SPL as the requesting Splunk user. That user needs search capability and read access to the lookup in the selected app namespace.
+Single-value and multiple-value lookup fields use the requesting Splunk user’s permissions in the selected app namespace. SPL searches require search capability and read access to the lookup. Simple KV Store lookups can use direct collection reads with that same user’s read permissions.
 
 ```spl
 | inputlookup identity_lookup_expanded
@@ -71,9 +71,11 @@ Set **Value field sent to SOAR** to `identity` and **Display label field** to `d
 
 Searches must start with `inputlookup`. ActionStack accepts `local=true` or `local=false` before or after the lookup name and passes it through to Splunk. Supported transformations are `eval`, `where`, `search`, `fields`, `table`, `rename`, `dedup`, `sort`, `head`, `tail`, `fillnull`, `rex`, `regex`, `spath`, `stats`, `eventstats`, `streamstats`, `mvexpand`, `makemv`, `mvcombine`, `nomv`, `convert`, and `replace`. Macros, subsearches, custom commands, and write commands are not supported.
 
+For a KV Store lookup whose output fields are declared `string` in `collections.conf`, with only `fields` or `table` projections, ActionStack resolves the lookup definition and reads matching records directly from the collection. No search job is created. Scalar `mvexpand` also uses this path; array results fall back to SPL. Definitions with filters or time fields, CSV lookups, and other transformations use SPL so their semantics are preserved. Direct reads require access to the lookup definition, collection configuration, and underlying collection; otherwise the app tries the normal search path. For the fastest experience, materialize expensive transformations into a KV Store lookup and use a simple projection.
+
 The default search delay is 50 ms after at least three characters. Results are limited to 25 prefix matches. Search jobs have a five-second execution limit. Each form supports up to five lookup fields; multiple-value fields accept up to 25 items. Recent suggestions are cached in the field for 30 seconds; submission checks always run against the lookup again. Large lookups may require scans even when results are limited.
 
-Multiple-value text and lookup fields accept comma-, newline-, or semicolon-separated lists. Paste a list, or type it and press Enter or **Add values**. For lookups, use exact values from the configured SOAR value field; use search suggestions to select by display label. A batch with unknown values is rejected without adding a partial list. Duplicate values are removed.
+Multiple-value text and lookup fields accept comma-, newline-, or semicolon-separated lists. Paste a list, or type it and press Enter or **Add values**. For lookups, use values from the configured SOAR value field (matching ignores case); use search suggestions to select by display label. A batch with unknown values is rejected without adding a partial list. Duplicate values are removed. Lookup verification also removes case-only duplicates and returns the stored value, including its casing, before validation and delivery.
 
 ## Permissions
 
@@ -93,7 +95,9 @@ Lookup searches use the requesting user's session. Application storage uses serv
 
 ## Submissions and recovery
 
-**Submissions** shows authorized requests in the selected workspace. **My submissions** filters to the signed-in user. Receipts poll SOAR status every 30 seconds while open and visible. Summary and result data are size-limited; use SOAR for complete results.
+**Submissions** shows authorized requests in the selected workspace. **My submissions** filters to the signed-in user. The list shows ten requests per page with playbook/action totals and colored status counts. Only the current page is polled, with at most three status requests in flight. Receipts poll SOAR status every 30 seconds while open and visible. Unavailable status is distinct from zero runs. If history exceeds 25 playbook runs or 100 actions, totals include the history but status counts cover the latest runs and are marked accordingly.
+
+Receipts prefer custom action run names over action types, and retain collapsible summaries and result data. Other block results are read for the latest three playbook runs, up to 100 results each. Format/filter/decision/code datapaths are available through SOAR’s `block_results` API. Utility blocks appear only when their explicit run headers are included in SOAR’s playbook report; coverage varies by version. Output existence, a false condition, or overall playbook success is never treated as a block status. Use SOAR for missing statuses and complete history.
 
 A submission is recorded before delivery. Use **Retry delivery** for a failed or uncertain request. Only the original requester can retry, and current permissions are checked. Retries preserve the original form, inputs, identity, connection settings, and source identifiers. Connection changes apply to new submissions; retain old credentials until pending requests have been resolved.
 
@@ -104,7 +108,7 @@ Delivery locks do not expire automatically. If a handler crashes while holding a
 - Back up ActionStack KV collections and encrypted credentials with the Splunk deployment.
 - Preserve form revisions, connection snapshots, unfinished submissions, and active delivery locks during retention cleanup.
 - The catalog is paginated; submission lists show the latest 200 authorized records. KV scans are bounded at 50,000 records.
-- Delivery attempts are limited to 10 per user per minute. These limits are shared across members in a cluster. Lookup searches are limited to 60 and activity refreshes to 20 per user per minute.
+- Delivery attempts are limited to 10 per user per minute. These limits are shared across members in a cluster. Lookup searches are limited to 60, receipt activity refreshes to 20, and submission-list status reads to 60 per user per minute, with separate budgets.
 - The app does not run a background retry or retention service. Prune old rate-limit records through your administration process, retaining at least the last 24 hours.
 - Validate role isolation, credential access, delivery/retry behavior, and, for clusters, member failover in your deployment.
 

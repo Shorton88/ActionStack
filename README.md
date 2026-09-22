@@ -11,7 +11,7 @@ Build forms in Splunk that submit events to Splunk SOAR.
 - Form builder with conditional fields, validation, lookup inputs, multiple-value inputs, and collapsible sections.
 - Drafts, publishing, version history, cloning, and recoverable form deletion.
 - Configurable SOAR labels, tags, CEF mappings, and approval requirements handled by your playbooks.
-- Submission history, delivery retries, and playbook/action status with result summaries and data.
+- Paginated submission history with playbook/action status counts, delivery retries, and receipts with custom action names, reported block results, summaries, and data.
 - Light, dark, and system themes.
 
 ## Installation
@@ -23,7 +23,7 @@ Download the app from [Splunkbase](https://splunkbase.splunk.com/app/9812):
 - **Standalone search head:** install the app directly through Splunk Web.
 - **Search head cluster:** deploy the app through the SHC deployer.
 
-Open ActionStack as a Splunk administrator. The setup wizard creates the first workspace and configures the SOAR connection. Create a form, select an existing SOAR label, and publish it. Enable **Allow SOAR automation on delivery** when the form should trigger active playbooks for that label.
+Open ActionStack as a Splunk administrator. The setup wizard creates the first workspace and configures the SOAR connection. Create a form, select an existing SOAR label, and publish it. **Allow SOAR automation on delivery** starts enabled for new forms; turn it off for intake-only forms. Existing forms keep their setting.
 
 See [Deployment](DEPLOYMENT.md) for configuration and permissions, and the [SOAR event contract](SOAR_EVENT_CONTRACT.md) for submitted fields.
 

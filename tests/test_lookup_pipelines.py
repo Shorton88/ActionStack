@@ -32,7 +32,7 @@ class LookupPipelines(unittest.TestCase):
    with self.subTest(field=field),self.assertRaises(Error):validate_source(dict(CONFIG,value_field=field))
  def test_value_is_validated_exactly_not_its_label(self):
   spl,_=lookup_spl(CONFIG,['user-1','user-2'],True)
-  self.assertIn("tostring('identity') = \"user-1\"",spl);self.assertNotIn("tostring('display')",spl);self.assertIn('head 2',spl)
+  self.assertIn("lower(tostring('identity')) = \"user-1\"",spl);self.assertNotIn("tostring('display')",spl);self.assertIn('head 251',spl)
  def test_label_matches_return_the_underlying_value(self):
   rest=Mock();rest.call.side_effect=[{'sid':'1'},{'entry':[{'content':{'isDone':True}}]},{'results':[{'identity':'uid-17','display':'Alice Example'},{'identity':'uid-17','display':'Alice duplicate'}]},{}]
   result=LookupSearch(rest,'requester').search(CONFIG,'ali')

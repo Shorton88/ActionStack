@@ -42,7 +42,6 @@ export function FieldValidation({
   if (["section", "static_text"].includes(field.type)) return null;
   return (
     <section className="actionstack-field-validation">
-      <h4>Validation</h4>
       <p>
         Optional checks for this field.{" "}
         {["text_list", "lookup_multi", "multiselect"].includes(field.type)

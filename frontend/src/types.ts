@@ -110,13 +110,18 @@ export type Activity = {
   demo: boolean;
   playbooks: RunGroup;
   actions: RunGroup;
+  blocks?: RunGroup;
 };
 export type RunGroup = {
+  counts?: Record<string, number> | null;
+  notice?: string;
   summary_error?: string;
   summary_truncated?: boolean;
   items: {
-    id: number;
+    id: number | string;
     name: string;
+    action?: string;
+    block_type?: string;
     status: string;
     summaries?: {
       app_run_id: number;

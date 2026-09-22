@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
+import { RunCounts } from "./RunCounts";
 import { api } from "./api";
 import type { Activity, RunGroup } from "./types";
 
@@ -8,7 +9,13 @@ function Runs({ title, group }: { title: string; group: RunGroup }) {
     <div className="activity-group">
       <h4>
         {title}
-        {group.total !== null ? ` (${group.total})` : ""}
+        {group.counts ? (
+          <RunCounts group={group} label={title} />
+        ) : group.total !== null ? (
+          ` (${group.total})`
+        ) : (
+          ""
+        )}
       </h4>
       {group.error ? (
         <p role="status" className="activity-error">
@@ -24,7 +31,10 @@ function Runs({ title, group }: { title: string; group: RunGroup }) {
               <div>
                 <b>{run.name}</b>
                 <small>
-                  Run #{run.id}
+                  {run.block_type || `Run #${run.id}`}
+                  {run.action && run.action !== run.name
+                    ? ` · ${run.action}`
+                    : ""}
                   {run.playbook_run_id
                     ? ` · Playbook run #${run.playbook_run_id}`
                     : ""}
@@ -71,6 +81,7 @@ function Runs({ title, group }: { title: string; group: RunGroup }) {
               </span>
             </div>
           ))}
+          {group.notice && <p className="muted">{group.notice}</p>}
           {group.summary_error && (
             <p role="status" className="activity-error">
               {group.summary_error}
@@ -84,8 +95,8 @@ function Runs({ title, group }: { title: string; group: RunGroup }) {
           )}
           {group.truncated && (
             <p className="muted">
-              Showing the latest {group.items.length} of {group.total}. Open
-              SOAR for the complete history.
+              Showing a limited set of recent results. Open SOAR for the
+              complete history.
             </p>
           )}
         </>
@@ -185,6 +196,7 @@ export function AutomationActivity({
               )}
               <Runs title="Playbooks" group={data.playbooks} />
               <Runs title="Actions" group={data.actions} />
+              {data.blocks && <Runs title="Other blocks" group={data.blocks} />}
               <small className="muted">
                 Last checked {new Date(data.checked_at).toLocaleTimeString()} ·
                 Refreshes every 30 seconds while this receipt is visible.

@@ -62,7 +62,7 @@ When approval is unnecessary, the policy is `none`. These fields express a requi
 4. Create the artifact with the container ID and the form's automation setting.
 5. Save both IDs and mark delivery complete.
 
-Automatic playbooks are selected by the container label. Enable **Allow SOAR automation on delivery**, publish the form, and configure an active playbook for that label. ActionStack reads playbook status but does not explicitly start playbooks through the run API.
+Automatic playbooks are selected by the container label. **Allow SOAR automation on delivery** starts enabled for new forms. Publish the form with this enabled, and configure an active playbook for that label. ActionStack reads playbook status but does not explicitly start playbooks through the run API.
 
 Source identifiers are stable across delivery retries:
 

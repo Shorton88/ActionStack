@@ -24,7 +24,6 @@ export function LookupSettings({
     onChange({ lookup: { ...c, ...p } });
   return (
     <div className="actionstack-lookup-config">
-      <h4>Lookup source</h4>
       <label className="field">
         Search
         <textarea
@@ -157,22 +156,31 @@ export function LookupField({
     setOpen(false);
     const version = ++batchVersion.current;
     try {
-      const requested = mergeValues(values, raw).filter(
-        (v) => !values.includes(v),
+      const requested = mergeValues(values, raw, true).filter(
+        (v) =>
+          !values.some(
+            (selected) => selected.toLowerCase() === v.toLowerCase(),
+          ),
       );
       if (requested.length) {
         setAdding(true);
         const result = await fetchOptions(requested);
         if (version !== batchVersion.current) return;
-        const found = new Map(result.options.map((o) => [o.value, o.label]));
-        const missing = requested.filter((v) => !found.has(v));
+        const found = new Map(
+          result.options.map((o) => [o.value.toLowerCase(), o]),
+        );
+        const missing = requested.filter((v) => !found.has(v.toLowerCase()));
         if (missing.length)
           throw new Error(
             "Not found in lookup: " +
               missing.join(", ") +
-              ". Nothing was added. Use exact values or select search results.",
+              ". Nothing was added. Use lookup values or select search results.",
           );
-        const next = [...new Set([...currentValues.current, ...requested])];
+        const next = mergeValues(
+          currentValues.current,
+          requested.map((v) => found.get(v.toLowerCase())!.value).join("\n"),
+          true,
+        );
         if (next.length > 25) throw new Error("You can add up to 25 items.");
         result.options.forEach((o) => {
           selectedLabels.current[o.value] = o.label;
@@ -232,7 +240,12 @@ export function LookupField({
   }, [form.id, form.version, field.key, JSON.stringify(c), preview]);
   const select = (option: { value: string; label: string }) => {
     const v = option.value;
-    if (multiple && (values.includes(v) || values.length >= 25)) return;
+    if (
+      multiple &&
+      (values.some((selected) => selected.toLowerCase() === v.toLowerCase()) ||
+        values.length >= 25)
+    )
+      return;
     queue.current?.set("");
     selectedLabels.current[v] = option.label;
     setTerm(multiple ? "" : option.label);
@@ -349,7 +362,12 @@ export function LookupField({
               role="option"
               aria-selected={i === active}
               aria-disabled={
-                multiple && (values.includes(o.value) || values.length >= 25)
+                multiple &&
+                (values.some(
+                  (selected) =>
+                    selected.toLowerCase() === o.value.toLowerCase(),
+                ) ||
+                  values.length >= 25)
               }
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => select(o)}

@@ -109,26 +109,26 @@ class LookupAdapterTests(unittest.TestCase):
         for term in ['`macro`','bad\nvalue','a'*201]:
             with self.assertRaises(Error):lookup_spl(CONFIG,term)
     def test_user_namespace_bounded_results_and_cleanup(self):
-        rest=Mock();rest.call.side_effect=[{'sid':'123.4'},{'entry':[{'content':{'isDone':'1'}}]},{'results':[{'identity':'alice'+str(i)} for i in range(26)]},{}]
+        rest=Mock();rest.call.side_effect=[None,{'sid':'123.4'},{'entry':[{'content':{'isDone':'1'}}]},{'results':[{'identity':'alice'+str(i)} for i in range(26)]},{}]
         result=LookupSearch(rest,'alice@example.test').search(CONFIG,'ali')
         self.assertEqual(len(result['options']),25);self.assertTrue(result['more'])
         self.assertTrue(rest.call.call_args_list[0].args[1].startswith('/servicesNS/alice%40example.test/search/'))
-        self.assertEqual(rest.call.call_args_list[0].kwargs['form']['max_time'],'5')
-        self.assertEqual(rest.call.call_args_list[0].kwargs['form']['exec_mode'],'blocking')
+        self.assertEqual(rest.call.call_args_list[1].kwargs['form']['max_time'],'5')
+        self.assertEqual(rest.call.call_args_list[1].kwargs['form']['exec_mode'],'blocking')
         self.assertEqual(rest.call.call_args_list[-1].args[0],'DELETE')
         self.assertEqual(rest.call.call_args_list[-2].kwargs['params']['count'],26)
     def test_partial_failed_or_malformed_results_fail_closed_and_cleanup(self):
         for c in [{'isFinalized':True},{'isFailed':'1'},{'dispatchState':'FAILED'}]:
-            rest=Mock();rest.call.side_effect=[{'sid':'1'},{'entry':[{'content':c}]},{}]
+            rest=Mock();rest.call.side_effect=[None,{'sid':'1'},{'entry':[{'content':c}]},{}]
             with self.assertRaises(Error):LookupSearch(rest,'alice').search(CONFIG,'ali')
             self.assertEqual(rest.call.call_args_list[-1].args[0],'DELETE')
         for results in [{'results':[None]},{'results':[],'messages':[{'type':'WARN'}]}]:
-            rest=Mock();rest.call.side_effect=[{'sid':'1'},{'entry':[{'content':{'isDone':True}}]},results,{}]
+            rest=Mock();rest.call.side_effect=[None,{'sid':'1'},{'entry':[{'content':{'isDone':True}}]},results,{}]
             with self.assertRaises(Error):LookupSearch(rest,'alice').search(CONFIG,'ali')
-    def test_exact_search_uses_one_result_and_is_case_sensitive(self):
-        spl,_=lookup_spl(CONFIG,'Alice',True);self.assertIn('head 1',spl);self.assertNotIn('lower(',spl)
-        rest=Mock();rest.call.side_effect=[{'sid':'1'},{'entry':[{'content':{'isDone':True}}]},{'results':[{'identity':'alice'}]},{}]
-        self.assertEqual(LookupSearch(rest,'alice').search(CONFIG,'Alice',True)['options'],[])
+    def test_exact_search_is_bounded_case_insensitive_and_returns_canonical_value(self):
+        spl,_=lookup_spl(CONFIG,'Alice',True);self.assertIn('head 251',spl);self.assertIn('lower(',spl)
+        rest=Mock();rest.call.side_effect=[None,{'sid':'1'},{'entry':[{'content':{'isDone':True}}]},{'results':[{'identity':'alice'}]},{}]
+        self.assertEqual(LookupSearch(rest,'alice').search(CONFIG,'Alice',True)['options'],[{'value':'alice','label':'alice'}])
 
 class SummaryTests(unittest.TestCase):
     def test_result_projection_includes_data_and_redacts_credentials(self):

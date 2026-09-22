@@ -1,5 +1,8 @@
 import {
   FileText,
+  ScanLine,
+  Server,
+  UserRound,
   Globe,
   Search,
   ShieldCheck,
@@ -8,6 +11,9 @@ import {
 } from "lucide-react";
 
 export const formIcons = {
+  scan: { label: "Scan", Icon: ScanLine },
+  server: { label: "Server", Icon: Server },
+  user: { label: "User", Icon: UserRound },
   shield: { label: "Shield", Icon: ShieldCheck },
   workflow: { label: "Workflow", Icon: Workflow },
   search: { label: "Search", Icon: Search },

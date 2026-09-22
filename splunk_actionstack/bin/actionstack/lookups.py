@@ -4,6 +4,7 @@ import re
 import time
 from urllib.parse import quote
 from .core import Error
+from .kv_lookup import collection_rows
 
 SOURCE=re.compile(r'\s*\|\s*inputlookup\s+([A-Za-z0-9_][A-Za-z0-9_.-]{0,127})\s*\|\s*fields\s+([A-Za-z_][A-Za-z0-9_]{0,63})\s*',re.I)
 
@@ -74,12 +75,12 @@ def lookup_spl(config,term,exact=False):
     if isinstance(term,list) and (not exact or not 1<=len(term)<=25): raise Error(400,'Select 1–25 lookup values.')
     if any(not isinstance(t,str) or not 1<=len(t)<=200 or any(ord(c)<32 for c in t) or '`' in t for t in terms): raise Error(400,'Enter up to 200 characters without control characters or backticks.')
     if exact:
-        comparison=' OR '.join(f"tostring('{column}') = {json.dumps(t,ensure_ascii=False)}" for t in terms)
+        comparison=' OR '.join(f"lower(tostring('{column}')) = {json.dumps(t.lower(),ensure_ascii=False)}" for t in terms)
     else:
         value=json.dumps(term.lower(),ensure_ascii=False)
         comparison=' OR '.join(f"substr(lower(tostring('{field}')),1,{len(term.lower())}) = {value}" for field in dict.fromkeys([column,label]))
     columns=' '.join(dict.fromkeys([column,label]))
-    return f"| {pipeline(config['search'])} | where ({comparison}) | dedup {column} | head {len(terms) if exact else 26} | fields {columns}",column
+    return f"| {pipeline(config['search'])} | where ({comparison}) | dedup {column} | head {251 if exact else 26} | fields {columns}",column
 
 def truth(value): return value is True or value==1 or value=='1'
 
@@ -88,6 +89,8 @@ class LookupSearch:
 
     def search(self,config,term,exact=False):
         spl,column=lookup_spl(config,term,exact)
+        rows=collection_rows(self.rest,self.username,config['app'],pipeline(config['search']),lookup_fields(config),term,exact)
+        if rows is not None: return lookup_options(rows,config,term,exact)
         base='/servicesNS/'+quote(self.username,safe='')+'/'+quote(config['app'],safe='')+'/search/jobs'
         sid=None
         try:
@@ -107,21 +110,10 @@ class LookupSearch:
                 if truth(c.get('isDone')) or c.get('dispatchState')=='DONE': break
                 time.sleep(0.1)
             else: raise Error(504,'Lookup search timed out. Refine the query or use a smaller lookup.')
-            result=self.rest.call('GET',path+'/results',params={'count':(len(term) if isinstance(term,list) else 1) if exact else 26,'output_mode':'json'})
+            result=self.rest.call('GET',path+'/results',params={'count':251 if exact else 26,'output_mode':'json'})
             if not isinstance(result,dict) or not isinstance(result.get('results'),list) or not isinstance(result.get('messages',[]),list) or any(not isinstance(m,dict) or m.get('type') in ['WARN','ERROR','FATAL'] for m in result.get('messages',[])):
                 raise Error(503,'Lookup results could not be confirmed. Check the lookup configuration and permissions.')
-            _,label_column=lookup_fields(config)
-            options=[]; seen=set()
-            for row in result['results']:
-                if not isinstance(row,dict): raise Error(502,'Invalid lookup result row.')
-                if column not in row or label_column not in row: raise Error(400,'Lookup results are missing the configured value or label field. Keep both fields in the final SPL output.')
-                value=row[column]; label=row[label_column]
-                if not isinstance(value,str) or not value or len(value)>200 or any(ord(c)<32 for c in value): continue
-                if not isinstance(label,str) or not label or len(label)>200: continue
-                matches=(value in term if isinstance(term,list) else value==term) if exact else any(v.lower().startswith(term.lower()) for v in [value,label])
-                if matches and value not in seen:
-                    seen.add(value); options.append({'value':value,'label':label})
-            return {'options':options[:25],'more':len(options)>25}
+            return lookup_options(result['results'],config,term,exact)
         except Error as exc:
             if exc.status==503 and 'storage' in exc.message.lower(): raise Error(503,'Lookup search is unavailable. The signed-in user needs search capability and read access to this lookup in its app context.')
             raise
@@ -129,3 +121,20 @@ class LookupSearch:
             if sid and re.fullmatch(r'[A-Za-z0-9_.-]+',sid):
                 try: self.rest.call('DELETE',base+'/'+quote(sid,safe=''))
                 except Error: pass  # Splunk's auto-cancel/TTL still bounds abandoned jobs.
+
+
+def lookup_options(rows,config,term,exact=False):
+    column,label_column=lookup_fields(config)
+    if exact and len(rows)>250: raise Error(400,'Too many lookup values differ only by case. Refine the lookup source.')
+    requested=[v.lower() for v in (term if isinstance(term,list) else [term])]
+    options=[]; seen=set()
+    for row in rows:
+        if not isinstance(row,dict): raise Error(502,'Invalid lookup result row.')
+        if column not in row or label_column not in row: raise Error(400,'Lookup results are missing the configured value or label field. Keep both fields in the final SPL output.')
+        value=row[column]; label=row[label_column]
+        if not isinstance(value,str) or not value or len(value)>200 or any(ord(c)<32 for c in value): continue
+        if not isinstance(label,str) or not label or len(label)>200: continue
+        matches=value.lower() in requested if exact else any(v.lower().startswith(term.lower()) for v in [value,label])
+        if matches and value.lower() not in seen:
+            seen.add(value.lower()); options.append({'value':value,'label':label})
+    return {'options':options[:25],'more':len(rows)>=26 if not exact else False}
