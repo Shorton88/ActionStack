@@ -9,7 +9,7 @@ from .core import APP, Error, Conflict, allowed, capable, require, clone, digest
 
 from .workspaces import Workspaces, DEFAULT_WORKSPACE
 from .validation_policies import ValidationPolicies, validate_request, block_policy, public_policy
-from .lookups import validate_source
+from .lookups import validate_source,lookup_spl
 from .field_validation import inline_form, validate_field_inputs
 
 DEFAULT_SETTINGS={'soar_url':'','instance_name':'Splunk Enterprise','asset_id':None,'ca_pem':'','ignore_certificate_errors':False,'request_timeout':15,'label_prefix':'','revision':0}
@@ -97,7 +97,10 @@ class Service(Workspaces,ValidationPolicies):
             if field['type'] in ['lookup','lookup_multi'] and field['key'] in inputs:
                 result=self.run_lookup(actor,field['lookup'],inputs[field['key']],exact=True)
                 expected=inputs[field['key']] if isinstance(inputs[field['key']],list) else [inputs[field['key']]]
-                if not set(expected).issubset({o['value'] for o in result['options']}): raise Error(400,'Choose a current lookup value.',{field['key']:'This value is unavailable in the lookup. Search and select again.'})
+                found={o['value'].lower():o['value'] for o in result['options']}
+                if any(v.lower() not in found for v in expected): raise Error(400,'Choose a current lookup value.',{field['key']:'This value is unavailable in the lookup. Search and select again.'})
+                canonical=list(dict.fromkeys(found[v.lower()] for v in expected))
+                inputs[field['key']]=canonical if field['type']=='lookup_multi' else canonical[0]
         validate_request(f,inputs)
         validate_field_inputs(f,inputs)
         return inputs
@@ -270,12 +273,18 @@ class Service(Workspaces,ValidationPolicies):
         return {'fingerprint':hashlib.sha256(body['value'].encode('utf-8')).hexdigest()}
 
     def run_lookup(self,actor,config,term,exact=False):
-        validate_source(config)
+        lookup_spl(config,term,exact)
         if not self.lookup: raise Error(503,'Lookup search is not configured on this search head.')
         minute=int(time.time()//60)
+        bucket='lookup:'+digest(actor['username'])
+        # Avoid an HTTP conflict for every prior lookup this minute. The unique
+        # insert still arbitrates concurrent callers and pre-upgrade records.
+        occupied={r['_key'] for r in self.store.list('ratelimits',{'minute':minute,'bucket':bucket})}
         for slot in range(60):
+            key=bucket+':'+str(minute)+':'+str(slot)
+            if key in occupied: continue
             try:
-                self.store.insert('ratelimits',{'_key':'lookup:'+digest(actor['username'])+':'+str(minute)+':'+str(slot),'minute':minute})
+                self.store.insert('ratelimits',{'_key':key,'minute':minute,'bucket':bucket})
                 break
             except Conflict: pass
         else: raise Error(429,'Lookup search limit reached. Pause briefly before searching again.')
@@ -297,11 +306,12 @@ class Service(Workspaces,ValidationPolicies):
             config=field['lookup']
         validate_source(config)
         term=body['term']
+        if isinstance(term,list): return self.run_lookup(actor,config,term,exact=True)
         if not isinstance(term,str): raise Error(400,'Enter a search term.')
         if len(term)<config['min_chars']: return {'options':[],'more':False}
         return self.run_lookup(actor,config,term)
 
-    def activity(self,actor,sid):
+    def activity(self,actor,sid,summary=False):
         require(actor,'use')
         record=self.store.get('submissions',sid)
         if not record: raise Error(404,'Submission not found.')
@@ -309,15 +319,23 @@ class Service(Workspaces,ValidationPolicies):
         if not record.get('container_id'): raise Error(409,'SOAR event delivery is still pending.')
         # Separate read budget, shared across search heads; never consumes delivery slots.
         minute=int(time.time()//60)
-        for slot in range(20):
+        bucket=('activity-summary:' if summary else 'activity:')+digest(actor['username'])
+        used={r['_key'] for r in self.store.list('ratelimits',{'minute':minute,'bucket':bucket})}
+        for slot in range(60 if summary else 20):
+            key=bucket+':'+str(minute)+':'+str(slot)
+            if key in used: continue
             try:
-                self.store.insert('ratelimits',{'_key':'activity:'+digest(actor['username'])+':'+str(minute)+':'+str(slot),'minute':minute})
+                self.store.insert('ratelimits',{'_key':key,'minute':minute,'bucket':bucket})
                 break
             except Conflict: pass
         else: raise Error(429,'Status refresh limit reached. Wait a minute and refresh again.')
         s=record['connection']
         remote=self.remote_factory(s,self.secrets.get(s.get('secret_ref')))
-        result=remote.activity(record['container_id'])
+        if summary:
+            remote.timeout=min(getattr(remote,'timeout',5),5)
+            result=remote.activity(record['container_id'],details=False)
+            result={key:{k:group.get(k) for k in ['total','counts','truncated','error']} for key,group in result.items() if key in ['playbooks','actions']}
+        else: result=remote.activity(record['container_id'])
         return dict(result,checked_at=utcnow(),automation_enabled=bool(record['artifact_payload'].get('run_automation')),demo=self.demo)
 
     def submit(self,actor,body):
@@ -390,7 +408,10 @@ class Service(Workspaces,ValidationPolicies):
         return self.receipt(record,actor)
 
     def dispatch(self,actor,method,path,body=None):
-        require(actor,'use'); self.bootstrap(); body=body or {}
+        require(actor,'use'); body=body or {}
+        # Interactive reads must not scan/migrate app configuration on every keystroke.
+        # Context/setup and edit routes initialize it before these reads are available.
+        if path not in ['/lookups/options','/admin/lookups/preview'] and not path.endswith(('/activity','/activity-summary')): self.bootstrap()
         parts=path.strip('/').split('/')
         if path=='/context' and method=='GET':
             ready=bool(self.settings().get('secret_ref')) or self.demo
@@ -434,6 +455,6 @@ class Service(Workspaces,ValidationPolicies):
             r=self.store.get('submissions',parts[1])
             if not r: raise Error(404,'Submission not found.')
             return self.receipt(r,actor)
-        if len(parts)==3 and parts[0]=='submissions' and parts[2]=='activity' and method=='GET': return self.activity(actor,parts[1])
+        if len(parts)==3 and parts[0]=='submissions' and parts[2] in ['activity','activity-summary'] and method=='GET': return self.activity(actor,parts[1],parts[2]=='activity-summary')
         if len(parts)==3 and parts[0]=='submissions' and parts[2]=='retry' and method=='POST': return self.deliver(actor,parts[1])
         raise Error(404,'Endpoint not found.')

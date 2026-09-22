@@ -1,5 +1,8 @@
 import {
   FileText,
+  createLucideIcon,
+  Server,
+  UserRound,
   Globe,
   Search,
   ShieldCheck,
@@ -7,7 +10,16 @@ import {
   Zap,
 } from "lucide-react";
 
+const ScanPulse = createLucideIcon("ScanPulse", [
+  ["circle", { cx: "12", cy: "12", r: "8", key: "reticle" }],
+  ["path", { d: "M12 2v3M12 19v3M2 12h3M19 12h3", key: "crosshairs" }],
+  ["path", { d: "M6 12h2l2-4 3 8 2-4h3", key: "pulse" }],
+]);
+
 export const formIcons = {
+  scan: { label: "Scan", Icon: ScanPulse },
+  server: { label: "Server", Icon: Server },
+  user: { label: "User", Icon: UserRound },
   shield: { label: "Shield", Icon: ShieldCheck },
   workflow: { label: "Workflow", Icon: Workflow },
   search: { label: "Search", Icon: Search },

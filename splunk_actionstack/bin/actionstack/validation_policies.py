@@ -28,12 +28,12 @@ def validate_rules(rules,fields=None):
         if condition is not None and (not isinstance(condition,dict) or set(condition)!={'field','equals'} or not isinstance(condition['field'],str) or not KEY.fullmatch(condition['field']) or not scalar(condition['equals'])): raise Error(400,'Invalid validation condition.')
         if by_key is not None:
             f=by_key.get(r['field'])
-            if not f or f['type']=='section': raise Error(400,'Validation policy references missing field: '+r['field'])
+            if not f or f['type'] in ['section','static_text']: raise Error(400,'Validation policy references missing field: '+r['field'])
             if r['operator'] in ['min','max'] and f['type']!='number': raise Error(400,'Numeric validation requires a number field: '+r['field'])
             if r['operator'] in ['regex','ip_address','domain','sha1','sha256'] and f['type'] in ['number','checkbox','multiselect']: raise Error(400,'This validation requires a text field: '+r['field'])
             for field_key,value in ([(r['field'],r['value'])] if r['operator'] in ['equals','not_equals'] else [])+([(condition['field'],condition['equals'])] if condition else []):
                 target=by_key.get(field_key)
-                if not target or target['type'] in ['section','multiselect']: raise Error(400,'Validation comparisons require an existing scalar field: '+field_key)
+                if not target or target['type'] in ['section','static_text','multiselect']: raise Error(400,'Validation comparisons require an existing scalar field: '+field_key)
                 if target['type']=='number' and type(value) not in [int,float] or target['type']=='checkbox' and type(value) is not bool or target['type'] not in ['number','checkbox'] and not isinstance(value,str): raise Error(400,'Validation value type does not match field: '+field_key)
                 if target['type'] in ['select','radio'] and value not in [o['value'] for o in target.get('options',[])]: raise Error(400,'Validation value is not a choice for field: '+field_key)
 

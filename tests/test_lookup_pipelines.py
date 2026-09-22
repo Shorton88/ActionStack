@@ -6,6 +6,23 @@ from actionstack.lookups import validate_source,lookup_spl,LookupSearch
 
 CONFIG={'search':'| inputlookup identities | eval display=first . " " . last | table identity display','value_field':'identity','label_field':'display','app':'search','min_chars':3,'debounce_ms':50}
 class LookupPipelines(unittest.TestCase):
+ def test_strict_option_preserves_pipeline_and_legacy_mapping(self):
+  for source in ['inputlookup identities','inputlookup strict=true identities','inputlookup identities strict=true']:
+   c=dict(CONFIG,search='| '+source+' | fields identity | mvexpand identity',label_field='identity')
+   spl,_=lookup_spl(c,'ali')
+   self.assertIn('| inputlookup strict=true identities | fields identity | mvexpand identity | where',spl)
+  legacy={'search':'| inputlookup identities | fields identity','app':'search','min_chars':3,'debounce_ms':50}
+  self.assertEqual(validate_source(legacy),('identity','identity'))
+ def test_local_option_is_rejected_with_correction(self):
+  for option in ['local=true','local=false','LOCAL=TRUE']:
+   for source in [f'inputlookup {option} identities',f'inputlookup identities {option}']:
+    with self.subTest(source=source),self.assertRaises(Error) as caught:
+     validate_source(dict(CONFIG,search=source))
+    self.assertEqual(caught.exception.status,400)
+    self.assertIn('Remove the local option',caught.exception.message)
+ def test_invalid_inputlookup_options_are_rejected(self):
+  for source in ['inputlookup identities local=yes','inputlookup identities strict=true strict=true','inputlookup identities strict=false','inputlookup identities append=true','inputlookup identities other']:
+   with self.subTest(source=source),self.assertRaises(Error):validate_source(dict(CONFIG,search=source))
  def test_transformations_execute_before_matching_both_columns(self):
   spl,column=lookup_spl(CONFIG,'Alice')
   self.assertEqual(column,'identity');self.assertIn('eval display=first . " " . last | table identity display | where',spl)
@@ -23,7 +40,7 @@ class LookupPipelines(unittest.TestCase):
    with self.subTest(field=field),self.assertRaises(Error):validate_source(dict(CONFIG,value_field=field))
  def test_value_is_validated_exactly_not_its_label(self):
   spl,_=lookup_spl(CONFIG,['user-1','user-2'],True)
-  self.assertIn("tostring('identity') = \"user-1\"",spl);self.assertNotIn("tostring('display')",spl);self.assertIn('head 2',spl)
+  self.assertIn("lower(tostring('identity')) = \"user-1\"",spl);self.assertNotIn("tostring('display')",spl);self.assertIn('head 251',spl)
  def test_label_matches_return_the_underlying_value(self):
   rest=Mock();rest.call.side_effect=[{'sid':'1'},{'entry':[{'content':{'isDone':True}}]},{'results':[{'identity':'uid-17','display':'Alice Example'},{'identity':'uid-17','display':'Alice duplicate'}]},{}]
   result=LookupSearch(rest,'requester').search(CONFIG,'ali')

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ValueChips } from "./MultiInput";
 import { api } from "./api";
 import { lookupSearch } from "./lookup-search.js";
+import { mergeValues } from "./multi-values.js";
 import type { Field, Form, LookupConfig } from "./types";
 export const defaultLookup: LookupConfig = {
   search: "| inputlookup identity_lookup_expanded | fields identity",
@@ -23,17 +24,18 @@ export function LookupSettings({
     onChange({ lookup: { ...c, ...p } });
   return (
     <div className="actionstack-lookup-config">
-      <h4>Lookup source</h4>
       <label className="field">
         Search
         <textarea
+          rows={4}
           value={c.search}
           onChange={(e) => change({ search: e.target.value })}
         />
         <small>
-          Start with | inputlookup lookup_name. Add read-only SPL such as eval,
-          where, rename, table or stats. Keep both result fields in the output.
-          Macros, subsearches and commands that write data are not supported.
+          Start with | inputlookup lookup_name. Add
+          read-only SPL such as eval, where, rename, table or stats. Keep both
+          result fields in the output. Macros, subsearches and commands that
+          write data are not supported.
         </small>
       </label>
       <label className="field">
@@ -124,14 +126,80 @@ export function LookupField({
     [more, setMore] = useState(false),
     [error, setError] = useState(""),
     [searching, setSearching] = useState(false),
+    [adding, setAdding] = useState(false),
     [open, setOpen] = useState(false),
     [active, setActive] = useState(-1);
   const input = useRef<HTMLInputElement>(null),
+    results = useRef<HTMLDivElement>(null),
+    batchVersion = useRef(0),
+    currentValues = useRef(values),
     skipValueSync = useRef(false),
     selectedLabels = useRef<Record<string, string>>({}),
     queue = useRef<ReturnType<typeof lookupSearch> | null>(null);
   const c = field.lookup || defaultLookup,
     id = "input-" + field.key;
+  currentValues.current = values;
+  const fetchOptions = (t: string | string[]) =>
+    api<{ options: { value: string; label: string }[]; more: boolean }>(
+      preview ? "/admin/lookups/preview" : "/lookups/options",
+      preview
+        ? { config: c, term: t }
+        : {
+            form_id: form.id,
+            form_version: form.version,
+            field: field.key,
+            term: t,
+          },
+    );
+  async function addValues(raw = term) {
+    queue.current?.set("");
+    setSearching(false);
+    setOpen(false);
+    const version = ++batchVersion.current;
+    try {
+      const requested = mergeValues(values, raw, true).filter(
+        (v) =>
+          !values.some(
+            (selected) => selected.toLowerCase() === v.toLowerCase(),
+          ),
+      );
+      if (requested.length) {
+        setAdding(true);
+        const result = await fetchOptions(requested);
+        if (version !== batchVersion.current) return;
+        const found = new Map(
+          result.options.map((o) => [o.value.toLowerCase(), o]),
+        );
+        const missing = requested.filter((v) => !found.has(v.toLowerCase()));
+        if (missing.length)
+          throw new Error(
+            "Not found in lookup: " +
+              missing.join(", ") +
+              ". Nothing was added. Use lookup values or select search results.",
+          );
+        const next = mergeValues(
+          currentValues.current,
+          requested.map((v) => found.get(v.toLowerCase())!.value).join("\n"),
+          true,
+        );
+        if (next.length > 25) throw new Error("You can add up to 25 items.");
+        result.options.forEach((o) => {
+          selectedLabels.current[o.value] = o.label;
+        });
+        onChange(next);
+      }
+      setTerm("");
+      setError("");
+    } catch (e) {
+      if (version === batchVersion.current) setError((e as Error).message);
+    } finally {
+      if (version === batchVersion.current) setAdding(false);
+    }
+  }
+  useEffect(() => {
+    if (open && active >= 0)
+      results.current?.children[active]?.scrollIntoView({ block: "nearest" });
+  }, [active, open]);
   useEffect(() => {
     if (skipValueSync.current) {
       skipValueSync.current = false;
@@ -142,25 +210,18 @@ export function LookupField({
   }, [value, multiple]);
   useEffect(() => {
     input.current?.setCustomValidity(
-      term && (multiple || !value)
-        ? "Select a value from the lookup results."
-        : "",
+      adding
+        ? "Checking lookup values…"
+        : term && (multiple || !value)
+          ? multiple
+            ? "Press Enter or Add values, or select lookup results."
+            : "Select a value from the lookup results."
+          : "",
     );
-  }, [term, value]);
+  }, [term, value, multiple, adding]);
   useEffect(() => {
     const q = lookupSearch(
-      (t) =>
-        api<{ options: { value: string; label: string }[]; more: boolean }>(
-          preview ? "/admin/lookups/preview" : "/lookups/options",
-          preview
-            ? { config: c, term: t }
-            : {
-                form_id: form.id,
-                form_version: form.version,
-                field: field.key,
-                term: t,
-              },
-        ),
+      fetchOptions,
       (result, message) => {
         setOptions(result?.options || []);
         setMore(!!result?.more);
@@ -172,12 +233,21 @@ export function LookupField({
       c.debounce_ms,
     );
     queue.current = q;
-    return () => q.dispose();
+    setAdding(false);
+    return () => {
+      q.dispose();
+      batchVersion.current++;
+    };
   }, [form.id, form.version, field.key, JSON.stringify(c), preview]);
   const select = (option: { value: string; label: string }) => {
     const v = option.value;
+    if (
+      multiple &&
+      (values.some((selected) => selected.toLowerCase() === v.toLowerCase()) ||
+        values.length >= 25)
+    )
+      return;
     queue.current?.set("");
-    if (multiple && (values.includes(v) || values.length >= 25)) return;
     selectedLabels.current[v] = option.label;
     setTerm(multiple ? "" : option.label);
     onChange(multiple ? [...values, v] : v);
@@ -194,56 +264,94 @@ export function LookupField({
           onChange={onChange}
         />
       )}
-      <input
-        ref={input}
-        id={id}
-        role="combobox"
-        aria-autocomplete="list"
-        aria-expanded={open && options.length > 0}
-        aria-controls={id + "-results"}
-        aria-activedescendant={
-          active >= 0 ? id + "-option-" + active : undefined
-        }
-        autoComplete="off"
-        required={field.required && (!multiple || !values.length)}
-        placeholder={
-          field.placeholder || "Type " + c.min_chars + " characters to search…"
-        }
-        value={term}
-        maxLength={200}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setOpen(false)}
-        onChange={(e) => {
-          const t = e.target.value;
-          if (!multiple && value) {
-            skipValueSync.current = true;
-            onChange("");
+      <div className="actionstack-multi-entry">
+        <input
+          ref={input}
+          id={id}
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={open && options.length > 0}
+          aria-controls={id + "-results"}
+          aria-activedescendant={
+            open && active >= 0 ? id + "-option-" + active : undefined
           }
-          setTerm(t);
-          setOpen(true);
-          setSearching(t.length >= c.min_chars);
-          queue.current?.set(t);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") setOpen(false);
-          if (e.key === "ArrowDown" && options.length) {
-            e.preventDefault();
+          autoComplete="off"
+          required={field.required && (!multiple || !values.length)}
+          placeholder={
+            field.placeholder ||
+            "Type " + c.min_chars + " characters to search…"
+          }
+          value={term}
+          maxLength={multiple ? 5025 : 200}
+          aria-busy={adding}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+          onChange={(e) => {
+            // Editing cancels the pending batch; late replies must not add chips.
+            batchVersion.current++;
+            setAdding(false);
+            const t = e.target.value;
+            if (!multiple && value) {
+              skipValueSync.current = true;
+              onChange("");
+            }
+            setTerm(t);
             setOpen(true);
-            setActive((n) => Math.min(n + 1, options.length - 1));
-          }
-          if (e.key === "ArrowUp" && options.length) {
+            const query = multiple && /[,;\r\n]/.test(t) ? "" : t;
+            setSearching(query.length >= c.min_chars);
+            queue.current?.set(query);
+          }}
+          onPaste={(e) => {
+            const pasted = e.clipboardData.getData("text");
+            if (!multiple || !/[,;\r\n]/.test(pasted)) return;
             e.preventDefault();
-            setActive((n) => Math.max(n - 1, 0));
-          }
-          if (e.key === "Enter" && term) e.preventDefault();
-          if (e.key === "Enter" && open && active >= 0 && options[active]) {
-            e.preventDefault();
-            select(options[active]);
-          }
-        }}
-      />
+            const el = e.currentTarget;
+            const raw =
+              term.slice(0, el.selectionStart ?? term.length) +
+              pasted +
+              term.slice(el.selectionEnd ?? term.length);
+            setTerm(raw);
+            void addValues(raw);
+          }}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
+            if (adding) {
+              if (e.key === "Enter") e.preventDefault();
+              return;
+            }
+            if (e.key === "Escape") setOpen(false);
+            if (e.key === "ArrowDown" && options.length) {
+              e.preventDefault();
+              setOpen(true);
+              setActive((n) => Math.min(n + 1, options.length - 1));
+            }
+            if (e.key === "ArrowUp" && options.length) {
+              e.preventDefault();
+              setActive((n) => Math.max(n - 1, 0));
+            }
+            if (e.key === "Enter" && term) e.preventDefault();
+            if (e.key === "Enter" && open && active >= 0 && options[active]) {
+              e.preventDefault();
+              select(options[active]);
+            } else if (e.key === "Enter" && multiple && term.trim()) {
+              void addValues();
+            }
+          }}
+        />
+        {multiple && term.trim() && (
+          <button
+            type="button"
+            className="button"
+            disabled={adding}
+            onClick={() => void addValues()}
+          >
+            {adding ? "Checking values…" : "Add values"}
+          </button>
+        )}
+      </div>
       {open && options.length > 0 && (
         <div
+          ref={results}
           id={id + "-results"}
           role="listbox"
           className="actionstack-lookup-results"
@@ -255,7 +363,12 @@ export function LookupField({
               role="option"
               aria-selected={i === active}
               aria-disabled={
-                multiple && (values.includes(o.value) || values.length >= 25)
+                multiple &&
+                (values.some(
+                  (selected) =>
+                    selected.toLowerCase() === o.value.toLowerCase(),
+                ) ||
+                  values.length >= 25)
               }
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => select(o)}
@@ -267,19 +380,24 @@ export function LookupField({
       )}
       <small role="status">
         {error ||
-          (searching
-            ? "Searching…"
-            : multiple && !term
-              ? values.length + "/25 selected · Search to add another."
-              : !multiple && value
-                ? "Selected from lookup"
-                : term.length < c.min_chars
-                  ? "Enter at least " + c.min_chars + " characters."
-                  : more
-                    ? "More matches available. Keep typing to narrow the list."
-                    : options.length
-                      ? options.length + " matches"
-                      : "No matches found.")}
+          (adding
+            ? "Checking lookup values…"
+            : searching
+              ? "Searching…"
+              : multiple && !term
+                ? values.length +
+                  "/25 selected · Search or paste comma-separated values."
+                : !multiple && value
+                  ? "Selected from lookup"
+                  : multiple && /[,;\r\n]/.test(term)
+                    ? "Press Enter or Add values to check this list."
+                    : term.length < c.min_chars
+                      ? "Enter at least " + c.min_chars + " characters."
+                      : more
+                        ? "More matches available. Keep typing to narrow the list."
+                        : options.length
+                          ? options.length + " matches"
+                          : "No matches found.")}
       </small>
     </div>
   );

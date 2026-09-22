@@ -45,8 +45,8 @@ class DemoSecrets:
 class DemoSoar:
     def __init__(self,store): self.store=store
     def labels(self): return ['automation_requests','events','phishing','service_requests']
-    def activity(self,container_id):
-        return {key:{'items':[],'total':0,'truncated':False,'error':None} for key in ['playbooks','actions']}
+    def activity(self,container_id,details=True):
+        return {key:{'items':[],'total':0,'truncated':False,'error':None,'counts':dict.fromkeys(['success','failed','running','pending','cancelled','unknown'],0)} for key in (['playbooks','actions','blocks'] if details else ['playbooks','actions'])}
     def ensure(self,kind,payload):
         key=payload['source_data_identifier']; existing=self.store.get('remote_'+kind,key)
         if existing: return existing['id']
@@ -62,7 +62,7 @@ class DemoLookup:
         values=['alice@example.test','alicia@example.test','alex@example.test','bob@example.test','scott@example.test']
         value_field,label_field=lookup_fields(config)
         options=[{'value':v,'label':v if value_field==label_field else v.split('@')[0].title()+' Example'} for v in values]
-        matches=[o for o in options if ((o['value'] in term if isinstance(term,list) else o['value']==term) if exact else any(o[k].lower().startswith(term.lower()) for k in ['value','label']))]
+        matches=[o for o in options if ((o['value'].lower() in [v.lower() for v in term] if isinstance(term,list) else o['value'].lower()==term.lower()) if exact else any(o[k].lower().startswith(term.lower()) for k in ['value','label']))]
         return {'options':matches,'more':False}
 
 ACTOR={'username':'demo.user','display_name':'Demo workspace','email':'demo@example.test','roles':['admin','user'],'capabilities':[PREFIX+x for x in ['use','submit','edit','publish','admin','audit','read_team']]}

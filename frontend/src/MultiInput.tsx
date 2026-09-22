@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { Field } from "./types";
+import { mergeValues } from "./multi-values.js";
 export function ValueChips({
   values,
   labels = {},
@@ -44,20 +45,14 @@ export function MultiInput({
       text.trim() ? "Press Enter or Add to include this value." : error,
     );
   }, [text, error]);
-  function add() {
-    const next = text.trim();
-    if (!next) return;
-    if (value.includes(next)) {
-      setError("This item is already added.");
-      return;
+  function add(raw = text) {
+    try {
+      onChange(mergeValues(value, raw));
+      setText("");
+      setError("");
+    } catch (e) {
+      setError((e as Error).message);
     }
-    if (value.length >= 25) {
-      setError("You can add up to 25 items.");
-      return;
-    }
-    onChange([...value, next]);
-    setText("");
-    setError("");
   }
   return (
     <div className="actionstack-multi-input">
@@ -75,7 +70,7 @@ export function MultiInput({
           aria-describedby={"input-" + field.key + "-help"}
           required={field.required && !value.length}
           value={text}
-          maxLength={200}
+          maxLength={5025}
           placeholder={field.placeholder || "Type a value and press Enter"}
           onChange={(e) => {
             setText(e.target.value);
@@ -87,18 +82,31 @@ export function MultiInput({
               add();
             }
           }}
+          onPaste={(e) => {
+            const pasted = e.clipboardData.getData("text");
+            if (!/[,;\r\n]/.test(pasted)) return;
+            e.preventDefault();
+            const el = e.currentTarget;
+            const raw =
+              text.slice(0, el.selectionStart ?? text.length) +
+              pasted +
+              text.slice(el.selectionEnd ?? text.length);
+            setText(raw);
+            add(raw);
+          }}
         />
         <button
           type="button"
           className="button"
           disabled={!text.trim()}
-          onClick={add}
+          onClick={() => add()}
         >
           Add
         </button>
       </div>
       <small role="status">
-        {error || `${value.length}/25 items · Press Enter to add each value.`}
+        {error ||
+          `${value.length}/25 items · Press Enter to add. Paste a comma-separated list to add several.`}
       </small>
     </div>
   );
