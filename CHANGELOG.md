@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.5
+
+- Add an optional receipt timeline with submission, delivery, and reported SOAR run updates. Keep records without timestamps separate from dated updates.
+- Export receipts as JSON with submitted fields, the form snapshot, and available SOAR activity, including result limits and refresh errors.
+- Export the filtered submissions list across pages as CSV, including delivery details, submitted fields, export identity, and scope. Spreadsheet formula values are escaped.
+
 ## 0.5.4
 
 - Remove unsupported `local` options from lookup searches and correct the builder guidance. Existing searches using them show instructions to remove the option.

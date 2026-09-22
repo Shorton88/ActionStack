@@ -7,6 +7,7 @@ import {
 import React, { useEffect, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import {
+  Download,
   ArrowUpRight,
   ArrowRight,
   ArrowLeft,
@@ -70,6 +71,12 @@ import { ApprovalRules } from "./ApprovalRules";
 import { Disclosure } from "./Disclosure";
 import { RunCounts } from "./RunCounts";
 import { useSubmissionActivity } from "./submission-activity";
+import {
+  downloadAudit,
+  receiptExport,
+  submissionsCsv,
+} from "./receipt-audit.js";
+import type { ActivitySnapshot } from "./receipt-audit.js";
 import { AutomationActivity } from "./AutomationActivity";
 import { approvalRequired } from "./approval.js";
 import { version as appVersion } from "../../package.json";
@@ -912,12 +919,34 @@ function App() {
                     Follow workspace requests from submission to SOAR delivery.
                   </p>
                 </div>
-                <Button
-                  onClick={() => refresh().catch((e) => setError(e.message))}
-                >
-                  <RefreshCw size={15} />
-                  Refresh
-                </Button>
+                <div className="button-row">
+                  <Button
+                    disabled={!submissions.length}
+                    onClick={() => {
+                      const exported_at = new Date().toISOString();
+                      downloadAudit(
+                        submissionsCsv(submissions, {
+                          exported_at,
+                          exported_by: ctx.username,
+                          app_version: appVersion,
+                          workspace_id: workspaceId,
+                          mine,
+                        }),
+                        `actionstack-submissions-${exported_at.slice(0, 10)}.csv`,
+                        "text/csv;charset=utf-8",
+                      );
+                    }}
+                  >
+                    <Download size={15} />
+                    Export CSV
+                  </Button>
+                  <Button
+                    onClick={() => refresh().catch((e) => setError(e.message))}
+                  >
+                    <RefreshCw size={15} />
+                    Refresh
+                  </Button>
+                </div>
               </div>
               <div className="filter-tabs" aria-label="Submission ownership">
                 <button
@@ -935,7 +964,10 @@ function App() {
               </div>
               <p className="muted actionstack-submission-note">
                 Showing up to 200 recent submissions you have permission to
-                view. Run counts refresh every 30 seconds for this page.
+                view. Run counts refresh every 30 seconds for this page. Export
+                CSV includes all {submissions.length} filtered records across
+                pages, submitted fields, and delivery details. Export a receipt
+                for its SOAR activity.
               </p>
               <div className="stat-row">
                 <div>
@@ -1122,7 +1154,9 @@ function App() {
       </div>
       {detail && (
         <Receipt
+          key={detail.id}
           submission={detail}
+          exportedBy={ctx.username}
           onClose={() => setDetail(null)}
           onRetry={async () => {
             const r = await api<Submission>(
@@ -1377,16 +1411,23 @@ function RequestForm({
 }
 function Receipt({
   submission: s,
+  exportedBy,
   onClose,
   onRetry,
 }: {
   submission: Submission;
+  exportedBy: string;
   onClose: () => void;
   onRetry: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [raw, setRaw] = useState(false);
+  const [activity, setActivity] = useState<ActivitySnapshot>({
+    data: null,
+    error: "",
+    loading: Boolean(s.container_id),
+  });
   return (
     <Modal title="Submission details" onClose={onClose}>
       <div className="modal-body">
@@ -1445,9 +1486,8 @@ function Receipt({
         </div>
         <AutomationActivity
           key={s.id}
-          id={s.id}
-          containerId={s.container_id}
-          enabled={s.form.mapping.run_automation}
+          submission={s}
+          onSnapshot={setActivity}
         />
         <button className="text-button" onClick={() => setRaw(!raw)}>
           <Braces size={15} />
@@ -1455,8 +1495,34 @@ function Receipt({
           <ChevronDown size={14} />
         </button>
         {raw && <pre>{JSON.stringify(s.inputs, null, 2)}</pre>}
+        <p className="muted">
+          Export JSON includes this receipt, submitted fields, and the last
+          loaded SOAR activity with its refresh time and any result limits. It
+          is a snapshot, not a complete audit log.
+        </p>
       </div>
-      <div className="modal-actions">
+      <div className="modal-actions actionstack-receipt-actions">
+        <Button
+          disabled={activity.loading}
+          onClick={() =>
+            downloadAudit(
+              JSON.stringify(
+                receiptExport(s, activity, {
+                  exported_at: new Date().toISOString(),
+                  exported_by: exportedBy,
+                  app_version: appVersion,
+                }),
+                null,
+                2,
+              ),
+              `actionstack-receipt-${s.id}.json`,
+              "application/json",
+            )
+          }
+        >
+          <Download size={15} />
+          Export JSON
+        </Button>
         <Button onClick={onClose}>Close</Button>
         {s.event_url && (
           <a

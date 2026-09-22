@@ -113,3 +113,13 @@ Delivery locks do not expire automatically. If a handler crashes while holding a
 - Validate role isolation, credential access, delivery/retry behavior, and, for clusters, member failover in your deployment.
 
 For a Splunk Web CSRF error, sign in again and check that the reverse proxy preserves session cookies, `X-Requested-With`, and `X-Splunk-Form-Key`. For a missing-label error, create the configured label in SOAR or change the form's mapping and publish it. Retrying an existing submission keeps its original label.
+
+## Receipt timeline and audit exports
+
+Switch a receipt from **Grouped** to **Timeline** to see submission, delivery, and SOAR run updates ordered by time. SOAR run timestamps are last updates, not start or completion times. Undated blocks appear after dated entries as **Time not reported**. This is a current snapshot; previous status changes and individual delivery attempts are not reconstructed.
+
+**Export JSON** on a receipt downloads the submitted fields, form definition snapshot, delivery details, available SOAR activity, and timeline. The file records the exporting user, app version, export time, and SOAR refresh time. Missing activity, refresh errors, and truncated result flags remain in the export. The button waits for an active activity refresh; failed reads still allow exporting the receipt and any previously loaded activity.
+
+**Export CSV** on Submissions includes all records in the selected workspace/ownership filter across pages, up to the list's 200 most recent accessible records. It exports delivery details and submitted fields as JSON in an `inputs_json` column; use receipt JSON for SOAR run details. The CSV states its scope and exporting identity. Formula-like spreadsheet values are prefixed with an apostrophe.
+
+Exports use only records already returned by the existing receipt access checks. They are snapshots for audit review, not complete historical or tamper-evident audit logs. They do not change retention or retrieve unbounded SOAR history.

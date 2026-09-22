@@ -4,6 +4,10 @@ Build forms in Splunk that submit events to Splunk SOAR.
 
 [Splunkbase](https://splunkbase.splunk.com/app/9812) · [Issues](https://github.com/Shorton88/ActionStack/issues) · [Contributing](CONTRIBUTING.md)
 
+## About this project
+
+ActionStack is an AI-driven project attempting to build something useful for the community. It is developed and maintained on a best-effort basis and is provided "as is," without warranty of any kind. See the [MIT license](LICENSE) for the full terms.
+
 ## Features
 
 - Team workspaces with access controlled by Splunk roles.
@@ -12,6 +16,7 @@ Build forms in Splunk that submit events to Splunk SOAR.
 - Drafts, publishing, version history, cloning, and recoverable form deletion.
 - Configurable SOAR labels, tags, CEF mappings, and approval requirements handled by your playbooks.
 - Paginated submission history with playbook/action status counts, delivery retries, and receipts with custom action names, reported block results, summaries, and data.
+- Optional receipt timeline and JSON receipt / CSV submission exports for audit review.
 - Light, dark, and system themes.
 
 ## Installation
