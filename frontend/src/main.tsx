@@ -3376,8 +3376,8 @@ function ConnectionSettings({
               {settings.ignore_certificate_errors
                 ? "Certificate validation is disabled for this SOAR connection."
                 : settings.ca_pem
-                  ? "Certificate validation is enabled using your previously saved CA certificate."
-                  : "Certificate validation is enabled using the system trust store."}
+                  ? "Certificate validation uses your saved CA certificate and the search head’s trusted CA sources."
+                  : "Certificate validation uses the Splunk Python runtime’s trust sources plus standard Linux CA bundles, unless SSL_CERT_FILE or SSL_CERT_DIR overrides them. Trust the CA on every search head and use a SOAR URL matching the certificate."}
             </p>
             <label className="field">
               Request timeout
@@ -3396,6 +3396,37 @@ function ConnectionSettings({
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="field">
+              Delivered submission retention
+              <select
+                value={settings.retention_days ?? 0}
+                onChange={(e) =>
+                  changeSettings({
+                    ...settings,
+                    retention_days: Number(e.target.value),
+                  })
+                }
+              >
+                <option value={0}>Keep indefinitely</option>
+                {[7, 30, 60, 90, 180, 365, 730].map((days) => (
+                  <option key={days} value={days}>
+                    Remove after {days} days
+                  </option>
+                ))}
+              </select>
+              <small>
+                Applies app-wide to delivered receipts, measured from their last
+                delivery update. Cleanup removes up to 100 per hour when
+                Submissions is opened or refreshed. Failed and unconfirmed
+                requests remain available.
+              </small>
+              <small>
+                Removal of receipts and submitted fields is permanent. Export
+                audit records first. SOAR events and ActionStack audit entries
+                are retained, along with a minimal submission ID marker to
+                prevent duplicate delivery.
+              </small>
             </label>
             {result && (
               <div className="notice success">
@@ -3437,7 +3468,7 @@ function ConnectionSettings({
               </Button>
               <Button primary disabled={busy} onClick={save}>
                 <Save size={15} />
-                Save connection
+                Save settings
               </Button>
             </div>
             {dirty && (

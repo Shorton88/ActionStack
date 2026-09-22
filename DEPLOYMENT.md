@@ -109,7 +109,7 @@ Delivery locks do not expire automatically. If a handler crashes while holding a
 - Preserve form revisions, connection snapshots, unfinished submissions, and active delivery locks during retention cleanup.
 - The catalog is paginated; submission lists show the latest 200 authorized records. KV scans are bounded at 50,000 records.
 - Delivery attempts are limited to 10 per user per minute. These limits are shared across members in a cluster. Lookup searches are limited to 60, receipt activity refreshes to 20, and submission-list status reads to 60 per user per minute, with separate budgets.
-- The app does not run a background retry or retention service. Prune old rate-limit records through your administration process, retaining at least the last 24 hours.
+- The app does not run a background retry or retention scheduler. Optional receipt cleanup runs when submissions are listed, as described below. Prune old rate-limit records through your administration process, retaining at least the last 24 hours.
 - Validate role isolation, credential access, delivery/retry behavior, and, for clusters, member failover in your deployment.
 
 For a Splunk Web CSRF error, sign in again and check that the reverse proxy preserves session cookies, `X-Requested-With`, and `X-Splunk-Form-Key`. For a missing-label error, create the configured label in SOAR or change the form's mapping and publish it. Retrying an existing submission keeps its original label.
@@ -123,3 +123,19 @@ Switch a receipt from **Grouped** to **Timeline** to see submission, delivery, a
 **Export CSV** on Submissions includes all records in the selected workspace/ownership filter across pages, up to the list's 200 most recent accessible records. It exports delivery details and submitted fields as JSON in an `inputs_json` column; use receipt JSON for SOAR run details. The CSV states its scope and exporting identity. Formula-like spreadsheet values are prefixed with an apostrophe.
 
 Exports use only records already returned by the existing receipt access checks. They are snapshots for audit review, not complete historical or tamper-evident audit logs. They do not change retention or retrieve unbounded SOAR history.
+
+## SOAR certificate trust
+
+SOAR HTTPS requests originate from Splunk's Python runtime on a search head. A trusted certificate in an administrator's browser or in another application's trust store does not configure that runtime. ActionStack loads Python's default CA sources, then supplements them with available standard Linux bundles (Debian/Ubuntu `/etc/ssl/certs/ca-certificates.crt`, RHEL-family `/etc/pki/tls/certs/ca-bundle.crt` and `/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem`, plus `/etc/ssl/ca-bundle.pem` and `/etc/ssl/cert.pem`). A previously saved app CA chain is also loaded.
+
+Explicit `SSL_CERT_FILE` or `SSL_CERT_DIR` environment overrides are respected; with either set, the additional Linux bundles are not loaded. The Splunk service account must be able to read the configured trust sources. Trust the CA on every search head, configure SOAR to serve its intermediate certificates, and use a URL whose hostname appears in the certificate. Certificate verification failures now include OpenSSL's bounded verification message; they are distinct from TLS handshake failures and network timeouts.
+
+**Ignore certificate validation** remains opt-in. It disables certificate and hostname checks only for this app's SOAR connection. Updating ActionStack does not enable it or change system trust configuration.
+
+## Delivered submission retention
+
+In **Settings → Delivered submission retention**, choose **Keep indefinitely** (default), or 7, 30, 60, 90, 180, 365, or 730 days, then **Save settings**. Only app administrators can change this app-wide policy. Export required receipts before enabling it: removed fields and receipt details cannot be restored through the app.
+
+Cleanup runs when submissions are listed or refreshed. A shared KV Store slot limits cleanup to one batch of up to 100 records per hour across the search heads. The age is measured from the last delivery update, and only records whose delivery status is `submitted` qualify. Recent records, failed/unconfirmed/pending deliveries, and records with a delivery lock remain untouched. An already running batch uses the policy it started with. Cleanup is not scheduled while the app is idle, so a backlog may take multiple visits and batches.
+
+Each removed receipt is replaced at the same KV key by a minimal marker containing its submission ID, `expired` status, and expiration time. This atomic replacement removes the form, submitted fields, actor, connection snapshot, and payloads without creating a gap that could allow duplicate delivery. Markers are excluded from receipt lists and retained indefinitely; do not delete them as part of routine cleanup. Reusing an expired request's submission key is rejected. SOAR events/artifacts, form versions, and ActionStack audit entries are not deleted. Batch counts are recorded as `submissions.expired` audit events.

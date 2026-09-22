@@ -10,6 +10,7 @@ export function connectionSettingsPayload(settings, token = "") {
     ca_pem: settings.ca_pem,
     ignore_certificate_errors: settings.ignore_certificate_errors ?? false,
     request_timeout: settings.request_timeout,
+    retention_days: settings.retention_days ?? 0,
     label_prefix: settings.label_prefix ?? "",
     revision: settings.revision,
     ...(token ? { token } : {}),

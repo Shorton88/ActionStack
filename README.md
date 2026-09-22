@@ -17,6 +17,7 @@ ActionStack is an AI-driven project attempting to build something useful for the
 - Configurable SOAR labels, tags, CEF mappings, and approval requirements handled by your playbooks.
 - Paginated submission history with playbook/action status counts, delivery retries, and receipts with custom action names, reported block results, summaries, and data.
 - Optional receipt timeline and JSON receipt / CSV submission exports for audit review.
+- Optional retention for delivered submissions, with SOAR events retained.
 - Light, dark, and system themes.
 
 ## Installation

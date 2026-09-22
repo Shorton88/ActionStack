@@ -25,10 +25,21 @@ class SQLiteStore:
         with self.connect() as conn:
             row=conn.execute('SELECT document FROM records WHERE collection=? AND key=?',(c,k)).fetchone()
         return json.loads(row[0]) if row else None
-    def list(self,c,query=None):
+    def list(self,c,query=None,limit=None):
         with self.connect() as conn: rows=conn.execute('SELECT document FROM records WHERE collection=? ORDER BY key',(c,)).fetchall()
         items=[json.loads(row[0]) for row in rows]
-        return [x for x in items if all(x.get(k)==v for k,v in (query or {}).items())]
+        def matches(record):
+            for key,value in (query or {}).items():
+                actual=record.get(key)
+                if isinstance(value,dict):
+                    if set(value)=={'$ne'}:
+                        if actual==value['$ne']: return False
+                    elif set(value)=={'$lt'}:
+                        if not isinstance(actual,type(value['$lt'])) or not actual<value['$lt']: return False
+                    else: raise ValueError('Unsupported demo query operator')
+                elif actual!=value: return False
+            return True
+        return [x for x in items if matches(x)][:limit]
     def insert(self,c,r):
         try:
             with self.connect() as conn: conn.execute('INSERT INTO records VALUES (?,?,?)',(c,r['_key'],json.dumps(r)))

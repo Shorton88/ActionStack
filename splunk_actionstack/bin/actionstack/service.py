@@ -12,7 +12,7 @@ from .validation_policies import ValidationPolicies, validate_request, block_pol
 from .lookups import validate_source,lookup_spl
 from .field_validation import inline_form, validate_field_inputs
 
-DEFAULT_SETTINGS={'soar_url':'','instance_name':'Splunk Enterprise','asset_id':None,'ca_pem':'','ignore_certificate_errors':False,'request_timeout':15,'label_prefix':'','revision':0}
+DEFAULT_SETTINGS={'soar_url':'','instance_name':'Splunk Enterprise','asset_id':None,'ca_pem':'','ignore_certificate_errors':False,'request_timeout':15,'retention_days':0,'label_prefix':'','revision':0}
 
 class Service(Workspaces,ValidationPolicies):
     def __init__(self, store, secrets, remote_factory, roles, demo=False, lookup=None,role_manager=None):
@@ -107,8 +107,10 @@ class Service(Workspaces,ValidationPolicies):
 
     def list_submissions(self,actor,body):
         if set(body)-{'workspace_id','mine'} or not isinstance(body.get('workspace_id','*'),str) or type(body.get('mine',False)) is not bool: raise Error(400,'Invalid submission filter.')
+        from .retention import age_out_submissions
+        age_out_submissions(self)
         workspace=body.get('workspace_id','*'); out=[]
-        for r in self.store.list('submissions'):
+        for r in self.store.list('submissions',{'status':{'$ne':'expired'}}):
             if workspace!='*' and r['form'].get('workspace_id',DEFAULT_WORKSPACE)!=workspace: continue
             if body.get('mine') and r['actor']['username']!=actor['username']: continue
             try: out.append(self.receipt(r,actor))
@@ -224,14 +226,16 @@ class Service(Workspaces,ValidationPolicies):
         allowed_keys=set(DEFAULT_SETTINGS)|{'token'}
         if set(body)-allowed_keys: raise Error(400,'Unknown connection settings.')
         from .soar import validate_url, validate_ca
+        current=self.settings()
         s={k:body.get(k,DEFAULT_SETTINGS[k]) for k in DEFAULT_SETTINGS}
+        s['retention_days']=body.get('retention_days',current.get('retention_days',0))
+        if type(s['retention_days']) is not int or s['retention_days'] not in [0,7,30,60,90,180,365,730]: raise Error(400,'Choose a supported submission retention period.')
         s['soar_url']=validate_url(s['soar_url'])
         validate_ca(s['ca_pem'],s['ignore_certificate_errors'])
         if not isinstance(s['instance_name'],str) or not 1<=len(s['instance_name'])<=120: raise Error(400,'Enter an instance name.')
         if not isinstance(s['label_prefix'],str) or not re.fullmatch(r'[a-zA-Z0-9_-]{0,64}',s['label_prefix']): raise Error(400,'Use up to 64 letters, numbers, underscores or hyphens for the label prefix.')
         if s['request_timeout'] not in [5,10,15,20,30]: raise Error(400,'Choose a supported timeout.')
         if s['asset_id'] is not None and (type(s['asset_id'])!=int or s['asset_id']<=0): raise Error(400,'Source asset ID must be a positive integer.')
-        current=self.settings()
         if body.get('revision')!=current['revision']: raise Conflict()
         token=body.get('token')
         if token is not None and (not isinstance(token,str) or len(token)>4096 or any(c in token for c in '\r\n')): raise Error(400,'Invalid token.')
@@ -252,6 +256,7 @@ class Service(Workspaces,ValidationPolicies):
         return {'ok':True,'labels':labels,'demo':self.demo,'message':message}
 
     def receipt(self,record,actor):
+        if record.get('status')=='expired': raise Error(404,'Receipt is unavailable or has aged out under the retention policy.')
         own=record['actor']['username']==actor['username']
         team=record['form'].get('access',{}).get('team_roles',[])
         if not (own or capable(actor,'admin') or (capable(actor,'read_team') and bool(set(team)&set(actor['roles'])) and self.workspace_allowed(actor,record['form'].get('workspace_id',DEFAULT_WORKSPACE),active=False))): raise Error(404,'Submission not found.')
@@ -351,6 +356,7 @@ class Service(Workspaces,ValidationPolicies):
         fingerprint=digest({'form_version':body['form_version'],'inputs':body['inputs']})
         existing=self.store.get('submissions',sid)
         if existing:
+            if existing.get('status')=='expired': raise Error(410,'This request has aged out. Its submission key cannot be reused.')
             if existing['fingerprint']!=fingerprint: raise Conflict('This submission key was already used for different data.')
             return self.receipt(existing,actor)
         if body['form_version']!=f['version']: raise Conflict('This form has a newer version. Refresh before submitting.')
@@ -363,6 +369,7 @@ class Service(Workspaces,ValidationPolicies):
         try: self.store.insert('submissions',record)
         except Conflict:
             existing=self.store.get('submissions',sid)
+            if existing and existing.get('status')=='expired': raise Error(410,'This request has aged out. Its submission key cannot be reused.')
             if not existing or existing['fingerprint']!=fingerprint: raise Conflict()
             return self.receipt(existing,actor)
         self.audit(actor,'submission.accepted',sid)

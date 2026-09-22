@@ -93,6 +93,7 @@ export type Submission = {
   demo: boolean;
 };
 export type Settings = {
+  retention_days: number;
   label_prefix: string;
   soar_url: string;
   instance_name: string;
