@@ -4,6 +4,7 @@
 
 - Make catalog Open form controls compact buttons with keyboard focus styling. In dark mode, use a dark iridescent fill that lights up on hover or keyboard focus, with a shine animation on hover.
 - Soften the light theme with darker slate surfaces, stronger borders, and deeper iridescent accents across the catalog, forms, and settings.
+- Correct light-theme hover colors for navigation, filters, lookup results, and icon controls; improve submission-count badge contrast and size.
 
 ## 0.5.6
 

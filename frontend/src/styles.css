@@ -3443,6 +3443,39 @@
 }
 .actionstack-app[data-theme="light"]
   :is(
+    .sidebar nav button:hover,
+    .settings-nav:hover,
+    .filter-tabs button:hover,
+    .palette-grid button:hover,
+    .actionstack-catalog-filters button:hover,
+    .actionstack-favorite:hover,
+    .actionstack-form-icon-options label:hover,
+    .actionstack-lookup-results [role="option"]:hover
+  ) {
+  background: #d6cee8;
+  color: #493565;
+  border-color: #a58dbf;
+}
+.actionstack-app[data-theme="light"] .icon-button:hover {
+  background: #d6cee8;
+  color: #493565 !important;
+}
+.actionstack-app[data-theme="light"] .icon-button.danger:hover {
+  background: #f0d7df;
+  color: #943042 !important;
+}
+.actionstack-app[data-theme="light"] :is(.nav-count, .count) {
+  background: #d3dce9;
+  color: #303d53;
+  border: 1px solid #8c9bb3;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  min-width: 22px;
+  padding: 1px 5px;
+}
+.actionstack-app[data-theme="light"]
+  :is(
     .sidebar nav button.active,
     .settings-nav.active,
     .editor-tabs button.selected,
