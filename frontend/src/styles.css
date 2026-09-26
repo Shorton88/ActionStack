@@ -2885,10 +2885,18 @@
   overflow-wrap: anywhere;
 }
 .actionstack-app .actionstack-catalog-card-footer .actionstack-open-form {
-  min-height: 44px;
-  padding: 10px 16px;
+  min-height: 34px;
+  padding: 6px 10px;
+  gap: 6px;
   flex-shrink: 0;
-  font-size: 14px !important;
+  font-size: 12px !important;
+}
+.actionstack-app[data-theme="dark"]
+  .button.actionstack-open-form:not(:hover):not(:focus-visible) {
+  background: linear-gradient(105deg, #30263f, #252d40 65%, #203b41);
+  border-color: #625474;
+  color: #e0d6f1;
+  box-shadow: inset 0 1px 0 #c4a5e51a;
 }
 .actionstack-app .actionstack-catalog-pagination {
   display: flex;
