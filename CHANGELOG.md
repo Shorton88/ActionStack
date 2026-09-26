@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.7
+
+- Make catalog Open form controls prominent buttons with larger click targets and keyboard focus styling.
+- Soften the light theme with darker slate surfaces, stronger borders, and deeper iridescent accents across the catalog, forms, and settings.
+
 ## 0.5.6
 
 - Load standard Linux CA bundles alongside Python trust defaults for SOAR HTTPS connections. Preserve explicit runtime CA overrides and certificate/hostname verification.

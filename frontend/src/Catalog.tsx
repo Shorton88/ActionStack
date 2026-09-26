@@ -160,6 +160,7 @@ export function Catalog({
                   <div className="actionstack-catalog-card-footer">
                     <span>{workspaceName(f)}</span>
                     <button
+                      className="button primary actionstack-open-form"
                       onClick={() => onOpen(f)}
                       aria-label={"Open " + f.title}
                     >
