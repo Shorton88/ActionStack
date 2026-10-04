@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.9
+
+- Select existing workspace categories or add a new category in form settings.
+- Export portable form JSON from the list or editor. Import validated files as new, unsaved drafts using the destination workspace’s access defaults. Existing forms, submissions, and connection settings are preserved.
+
 ## 0.5.8
 
 - Replace the checkbox default text input with a Checked / Unchecked selector so both boolean defaults can be set reliably.
