@@ -426,6 +426,9 @@ class Service(Workspaces,ValidationPolicies):
         if path=='/preferences' and method in ['GET','POST']: return self.preferences(actor,body if method=='POST' else None)
         if path=='/admin/soar-labels' and method=='GET': return self.available_labels(actor)
         if path=='/admin/forms/validate' and method=='POST': return self.preview_validation(actor,body)
+        if path=='/admin/forms/import' and method=='POST':
+            from .form_transfer import import_form
+            return import_form(self,actor,body)
         if path=='/submission-fingerprint' and method=='POST': return self.submission_fingerprint(actor,body)
         if path=='/workspaces' and method=='GET': return self.list_workspaces(actor)
         if path=='/admin/workspaces' and method=='GET': return self.list_workspaces(actor,True)

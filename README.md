@@ -14,6 +14,7 @@ ActionStack is an AI-driven project attempting to build something useful for the
 - Automation catalog with search, categories, favorites, and pagination.
 - Form builder with conditional fields, validation, lookup inputs, multiple-value inputs, and collapsible sections.
 - Drafts, publishing, version history, cloning, and recoverable form deletion.
+- Reusable workspace categories and JSON form export/import.
 - Configurable SOAR labels, tags, CEF mappings, and approval requirements handled by your playbooks.
 - Paginated submission history with playbook/action status counts, delivery retries, and receipts with custom action names, reported block results, summaries, and data.
 - Optional receipt timeline and JSON receipt / CSV submission exports for audit review.
@@ -32,6 +33,14 @@ Download the app from [Splunkbase](https://splunkbase.splunk.com/app/9812):
 Open ActionStack as a Splunk administrator. The setup wizard creates the first workspace and configures the SOAR connection. Create a form, select an existing SOAR label, and publish it. **Allow SOAR automation on delivery** starts enabled for new forms; turn it off for intake-only forms. Existing forms keep their setting.
 
 See [Deployment](DEPLOYMENT.md) for configuration and permissions, and the [SOAR event contract](SOAR_EVENT_CONTRACT.md) for submitted fields.
+
+## Moving forms between workspaces or instances
+
+Use **Export** in the form list, or **Export form** in the editor, to download a JSON definition. The editor export includes unsaved edits. Exports include fields, defaults, validation, conditional sections, appearance, category, lookup configuration, and SOAR mapping. They exclude source workspace permissions, form IDs, version history, submissions, and connection credentials.
+
+Choose **Import form**, select the JSON file (one form, up to 200 KB), and choose a destination workspace. ActionStack validates the file and opens a new, unsaved draft with a new ID and the destination workspace's default access. Review SOAR labels and lookup sources before saving or publishing; they must exist on the destination instance. Importing does not overwrite an existing form or create a SOAR event.
+
+In the editor's **Settings** tab, **Category** lists categories used by accessible forms in the current workspace. Choose **Add a new category…** to create another; it becomes reusable when the form is saved.
 
 ## Development
 

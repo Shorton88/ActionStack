@@ -8,6 +8,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Download,
+  Upload,
   ArrowUpRight,
   ArrowRight,
   ArrowLeft,
@@ -67,6 +68,9 @@ import { formIcon } from "./FormIcons";
 import { FormAppearance, ThemePicker } from "./Appearance";
 import { FormSections } from "./FormSections";
 import { cloneForm } from "./clone-form.js";
+import { CategoryPicker } from "./CategoryPicker";
+import { ImportForm } from "./ImportForm";
+import { formExport, MAX_FORM_FILE_BYTES } from "./form-transfer.js";
 import { ApprovalRules } from "./ApprovalRules";
 import { Disclosure } from "./Disclosure";
 import { RunCounts } from "./RunCounts";
@@ -1104,6 +1108,7 @@ function App() {
           )}
           {page === "builder" && (
             <Builder
+              categoryForms={allForms}
               workspaceId={workspaceId}
               workspaces={workspaces}
               ctx={ctx}
@@ -1560,6 +1565,7 @@ function Receipt({
 }
 
 function Builder({
+  categoryForms,
   workspaceId,
   workspaces,
   ctx,
@@ -1567,6 +1573,7 @@ function Builder({
   setEditor,
   onSaved,
 }: {
+  categoryForms: Form[];
   workspaceId: string;
   workspaces: Workspace[];
   ctx: Context;
@@ -1575,6 +1582,7 @@ function Builder({
   onSaved: (message?: string) => void;
 }) {
   const [automaticId, setAutomaticId] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [labels, setLabels] = useState<{ prefix: string; labels: string[] }>({
     prefix: "",
     labels: [],
@@ -1731,6 +1739,44 @@ function Builder({
       "Cloned as a new draft. Review the settings, then save or publish.",
     );
   }
+  function exportForm(form: Form) {
+    setError("");
+    try {
+      const contents = JSON.stringify(formExport(form, appVersion), null, 2);
+      if (new TextEncoder().encode(contents).length > MAX_FORM_FILE_BYTES)
+        throw new Error("This form exceeds the 200 KB export limit.");
+      downloadAudit(
+        contents,
+        `actionstack-form-${form.id}.json`,
+        "application/json",
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  const importDialog = importing && (
+    <Modal title="Import form" onClose={() => setImporting(false)}>
+      <ImportForm
+        workspaceId={workspaceId}
+        workspaces={workspaces.filter(
+          (w) =>
+            w.state === "active" &&
+            (!w.role_groups ||
+              can(ctx, "admin") ||
+              w.role_groups.admin.some((r) => ctx.roles.includes(r))),
+        )}
+        onCancel={() => setImporting(false)}
+        onImported={(form) => {
+          start(form);
+          setAutomaticId(true);
+          setImporting(false);
+          setNotice(
+            "Imported as a new draft. Review workspace access, SOAR mapping, and lookup sources, then save or publish.",
+          );
+        }}
+      />
+    </Modal>
+  );
   function update(patch: Partial<Form>) {
     if (
       editor &&
@@ -1832,10 +1878,16 @@ function Builder({
             <h1>Form builder</h1>
             <p>Turn a team's request into a repeatable starting point.</p>
           </div>
-          <Button primary onClick={create}>
-            <Plus size={16} />
-            Create form
-          </Button>
+          <div className="button-row">
+            <Button onClick={() => setImporting(true)}>
+              <Upload size={16} />
+              Import form
+            </Button>
+            <Button primary onClick={create}>
+              <Plus size={16} />
+              Create form
+            </Button>
+          </div>
         </div>
         <ErrorBox error={error} />
         <div className="filter-tabs">
@@ -1907,6 +1959,16 @@ function Builder({
                       {!trash && (
                         <Button
                           disabled={busy}
+                          onClick={() => exportForm(f)}
+                          aria-label={"Export " + f.title}
+                        >
+                          <Download size={14} />
+                          Export
+                        </Button>
+                      )}
+                      {!trash && (
+                        <Button
+                          disabled={busy}
                           onClick={() => cloneExisting(f)}
                           aria-label={"Clone " + f.title}
                         >
@@ -1948,6 +2010,7 @@ function Builder({
           />
         )}
         {deleteDialog}
+        {importDialog}
       </>
     );
   const field = editor.fields[selected];
@@ -1967,6 +2030,14 @@ function Builder({
           </h1>
         </div>
         <div className="button-row">
+          <Button
+            disabled={busy}
+            onClick={() => exportForm(editor)}
+            title="Export the current definition, including unsaved edits"
+          >
+            <Download size={15} />
+            Export form
+          </Button>
           {editor.revision > 0 && (
             <Button disabled={busy} onClick={() => cloneExisting(editor)}>
               <Copy size={15} />
@@ -2525,7 +2596,23 @@ function Builder({
                       ))}
                     </div>
                   )}
+                  {field.type === "checkbox" && (
+                    <label className="field">
+                      Default value
+                      <select
+                        value={field.default === true ? "true" : "false"}
+                        onChange={(e) =>
+                          fieldUpdate({ default: e.target.value === "true" })
+                        }
+                      >
+                        <option value="false">Unchecked</option>
+                        <option value="true">Checked</option>
+                      </select>
+                      <small>Initial state when someone opens the form.</small>
+                    </label>
+                  )}
                   {![
+                    "checkbox",
                     "multiselect",
                     "section",
                     "static_text",
@@ -2547,17 +2634,11 @@ function Builder({
                                 ? undefined
                                 : field.type === "number"
                                   ? Number(e.target.value)
-                                  : field.type === "checkbox"
-                                    ? e.target.value === "true"
-                                    : e.target.value,
+                                  : e.target.value,
                           })
                         }
                       />
-                      <small>
-                        {field.type === "checkbox"
-                          ? "Use true or false."
-                          : "Optional initial value."}
-                      </small>
+                      <small>Optional initial value.</small>
                     </label>
                   )}
                 </Disclosure>
@@ -2884,13 +2965,19 @@ function Builder({
                 Fixed after the first save.
               </small>
             </label>
-            <label className="field">
-              Category
-              <input
-                value={editor.category}
-                onChange={(e) => update({ category: e.target.value })}
-              />
-            </label>
+            <CategoryPicker
+              key={editor.id + ":" + editor.workspace_id}
+              value={editor.category}
+              categories={[...categoryForms, ...items]
+                .filter(
+                  (f) =>
+                    f.state !== "deleted" &&
+                    (f.workspace_id || "security") ===
+                      (editor.workspace_id || "security"),
+                )
+                .map((f) => f.category)}
+              onChange={(category) => update({ category })}
+            />
           </div>
         </div>
       )}
