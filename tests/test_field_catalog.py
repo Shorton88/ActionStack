@@ -58,6 +58,20 @@ class FieldChecks(unittest.TestCase):
 class LifecycleTests(unittest.TestCase):
     setUp=fx.ServiceTests.setUp
     tearDown=fx.ServiceTests.tearDown
+    def test_checkbox_defaults_survive_publish_and_submission(self):
+        revision=1
+        for default in [True,False]:
+            with self.subTest(default=default):
+                field=dict(simple_field('checkbox'),required=False,default=default)
+                saved=self.svc.save_form(fx.ADMIN,{'form':definition(field),'expected_revision':revision},True)
+                revision=saved['revision']
+                self.assertIs(self.svc.published('block-object')['fields'][0]['default'],default)
+                for incoming,expected in [({},default),({'target':not default},not default)]:
+                    receipt=self.svc.submit(self.user,{'form_id':'block-object','form_version':saved['version'],'inputs':incoming,'idempotency_key':f'checkbox-{default}-{expected}'})
+                    record=self.store.get('submissions',receipt['id'])
+                    self.assertEqual(record['status'],'submitted')
+                    self.assertIs(record['artifact_payload']['data']['actionstack']['inputs']['target'],expected)
+
     def test_editor_migration_is_detached_and_preserves_legacy_behavior(self):
         old=self.svc.published('block-object')
         f=self.svc.dispatch(fx.ADMIN,'GET','/admin/forms')[0]

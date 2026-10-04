@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.8
+
+- Replace the checkbox default text input with a Checked / Unchecked selector so both boolean defaults can be set reliably.
+
 ## 0.5.7
 
 - Make catalog Open form controls compact buttons with keyboard focus styling. In dark mode, use a dark iridescent fill that lights up on hover or keyboard focus, with a shine animation on hover.

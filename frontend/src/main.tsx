@@ -2525,7 +2525,23 @@ function Builder({
                       ))}
                     </div>
                   )}
+                  {field.type === "checkbox" && (
+                    <label className="field">
+                      Default value
+                      <select
+                        value={field.default === true ? "true" : "false"}
+                        onChange={(e) =>
+                          fieldUpdate({ default: e.target.value === "true" })
+                        }
+                      >
+                        <option value="false">Unchecked</option>
+                        <option value="true">Checked</option>
+                      </select>
+                      <small>Initial state when someone opens the form.</small>
+                    </label>
+                  )}
                   {![
+                    "checkbox",
                     "multiselect",
                     "section",
                     "static_text",
@@ -2547,17 +2563,11 @@ function Builder({
                                 ? undefined
                                 : field.type === "number"
                                   ? Number(e.target.value)
-                                  : field.type === "checkbox"
-                                    ? e.target.value === "true"
-                                    : e.target.value,
+                                  : e.target.value,
                           })
                         }
                       />
-                      <small>
-                        {field.type === "checkbox"
-                          ? "Use true or false."
-                          : "Optional initial value."}
-                      </small>
+                      <small>Optional initial value.</small>
                     </label>
                   )}
                 </Disclosure>
