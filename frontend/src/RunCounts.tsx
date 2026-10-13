@@ -2,7 +2,7 @@ import type { RunGroup } from "./types";
 
 export type CountGroup = Pick<
   RunGroup,
-  "counts" | "total" | "truncated" | "error"
+  "counts" | "counts_basis" | "total" | "truncated" | "error"
 >;
 
 export function RunCounts({
@@ -27,6 +27,11 @@ export function RunCounts({
       <b>
         {group.total} <span className="muted">total</span>
       </b>
+      {group.counts_basis === "soar_run_status" && (
+        <small title="SOAR's reported run statuses. Individual action results can have different outcomes; open the receipt for details.">
+          SOAR run statuses
+        </small>
+      )}
       {Object.entries(group.counts || {}).map(
         ([status, count]) =>
           count > 0 && (
@@ -39,13 +44,15 @@ export function RunCounts({
                 ? "✓"
                 : status === "failed"
                   ? "✕"
-                  : status === "running"
-                    ? "↻"
-                    : status === "pending"
-                      ? "◷"
-                      : status === "cancelled"
-                        ? "−"
-                        : "?"}{" "}
+                  : status === "mixed"
+                    ? "◐"
+                    : status === "running"
+                      ? "↻"
+                      : status === "pending"
+                        ? "◷"
+                        : status === "cancelled"
+                          ? "−"
+                          : "?"}{" "}
               {count}
               <span className="sr-only"> {status}</span>
             </span>

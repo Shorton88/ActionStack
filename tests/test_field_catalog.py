@@ -17,6 +17,16 @@ def check(op,value):return {'operator':op,'value':value,'message':'Choose a vali
 def definition(field):
     f=seed_form();f['mapping'].pop('policy');f['fields']=[field];return f
 
+def ipv6_pattern():
+    # Expanded and compressed hexadecimal IPv6, without positional matching.
+    h='[0-9a-fA-F]{1,4}'
+    alternatives=[f'(?:{h}:){{7}}{h}',f'::(?:{h}(?::{h}){{0,6}})?']
+    for left in range(1,8):
+        prefix=':'.join([h]*left)+'::'
+        right=7-left
+        alternatives.append(prefix+(f'(?:{h}(?::{h}){{0,{right-1}}})?' if right else ''))
+    return '(?:'+'|'.join(alternatives)+')'
+
 class FieldChecks(unittest.TestCase):
     def validate(self,kind,rules,value):
         f=validate_definition(definition(simple_field(kind,rules)),fx.ROLES)
@@ -41,8 +51,17 @@ class FieldChecks(unittest.TestCase):
         for bad in ['alice',['a','a'],['a',' a '],[''],[4],['a'*201],[str(n) for n in range(26)]]:
             with self.subTest(value=bad),self.assertRaises(Error):self.validate('text_list',[],bad)
     def test_invalid_or_unsafe_definitions(self):
-        for rule in [check('regex','['),check('regex','a'*513),check('like','a'*201),check('required','x'),check('bogus','x'),dict(check('equals','x'),field='other')]:
+        for rule in [check('regex','['),check('regex','a'*2049),check('like','a'*201),check('required','x'),check('bogus','x'),dict(check('equals','x'),field='other')]:
             with self.subTest(rule=rule),self.assertRaises(Error):validate_definition(definition(simple_field(rules=[rule])),fx.ROLES)
+    def test_long_ipv6_regex_and_length_boundary(self):
+        pattern=ipv6_pattern()
+        self.assertGreater(len(pattern),512)
+        self.assertLess(len(pattern),2048)
+        for value in ['::','::1','2001:db8::1','fe80::abcd:1234','1:2:3:4:5:6:7:8','1:2:3:4:5:6:7::']:
+            self.validate('text',[check('regex',pattern)],value)
+        for value in ['2001:db8:::1','12345::1','1:2:3:4:5:6:7:8:9','not-an-ip','192.0.2.1']:
+            with self.subTest(value=value),self.assertRaises(Error):self.validate('text',[check('regex',pattern)],value)
+        validate_definition(definition(simple_field(rules=[check('regex','a'*2048)])),fx.ROLES)
     def test_hidden_and_optional_fields_are_skipped(self):
         f=definition(simple_field(rules=[check('regex','X')]));f['fields'][0]['required']=False
         validate_field_inputs(f,{})
@@ -58,6 +77,17 @@ class FieldChecks(unittest.TestCase):
 class LifecycleTests(unittest.TestCase):
     setUp=fx.ServiceTests.setUp
     tearDown=fx.ServiceTests.tearDown
+    def test_long_regex_survives_preview_publish_and_submission(self):
+        pattern=ipv6_pattern(); form=definition(simple_field(rules=[check('regex',pattern)]))
+        self.svc.preview_validation(fx.ADMIN,{'form':form,'inputs':{'target':'2001:db8::1'}})
+        with self.assertRaises(Error):self.svc.preview_validation(fx.ADMIN,{'form':form,'inputs':{'target':'invalid'}})
+        saved=self.svc.save_form(fx.ADMIN,{'form':form,'expected_revision':1},True)
+        self.assertEqual(self.svc.published(form['id'])['fields'][0]['validation'][0]['value'],pattern)
+        body={'form_id':form['id'],'form_version':saved['version'],'inputs':{'target':'2001:db8::1'},'idempotency_key':'long-regex-valid'}
+        receipt=self.svc.submit(self.user,body)
+        self.assertEqual(receipt['status'],'submitted')
+        with self.assertRaises(Error):self.svc.submit(self.user,dict(body,inputs={'target':'invalid'},idempotency_key='long-regex-invalid'))
+        self.assertEqual(len(self.store.list('submissions')),1)
     def test_checkbox_defaults_survive_publish_and_submission(self):
         revision=1
         for default in [True,False]:

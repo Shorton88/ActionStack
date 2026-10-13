@@ -57,7 +57,7 @@ class DemoSoar:
     def __init__(self,store): self.store=store
     def labels(self): return ['automation_requests','events','phishing','service_requests']
     def activity(self,container_id,details=True):
-        return {key:{'items':[],'total':0,'truncated':False,'error':None,'counts':dict.fromkeys(['success','failed','running','pending','cancelled','unknown'],0)} for key in (['playbooks','actions','blocks'] if details else ['playbooks','actions'])}
+        return {key:{'items':[],'total':0,'truncated':False,'error':None,'counts_basis':'soar_run_status','counts':dict.fromkeys(['success','failed','mixed','running','pending','cancelled','unknown'],0)} for key in (['playbooks','actions','blocks'] if details else ['playbooks','actions'])}
     def ensure(self,kind,payload):
         key=payload['source_data_identifier']; existing=self.store.get('remote_'+kind,key)
         if existing: return existing['id']

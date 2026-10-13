@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.10
+
+- Group receipt details by each returned SOAR action result, keeping its status, summary, and result data together without matching submitted input order. Expanded details stay with their result when returned results reorder.
+- Show Mixed results and success/failure counts when an action has both outcomes, retaining SOAR's reported run status. Include failures without payloads and count reported results beyond the detail preview limit.
+- Read additional action-result pages within a five-request budget. Mark incomplete result counts and show Results incomplete when omitted results could contain failures. List and receipt totals consistently count SOAR run statuses, labeled separately from individual result outcomes.
+- Expand regex validation to 2,048 characters with a multiline editor and visible character count. Preserve the evaluation timeout and validate the same limit in the builder and backend.
+- Add search head cluster troubleshooting for stale app-list versions, including staged files, deployer-local versions merged into member defaults, member-local overrides, and metadata reloads. Check lockfile versions alongside Splunk package metadata during packaging.
+
 ## 0.5.9
 
 - Select existing workspace categories or add a new category in form settings.

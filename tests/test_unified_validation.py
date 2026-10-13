@@ -72,7 +72,7 @@ class RegexTests(unittest.TestCase):
     def test_fullmatch_flags_and_unicode(self):
         self.assertEqual(regex_matches([['INC-[0-9]+','INC-42'],['INC-[0-9]+','xINC-42'],['(?i)inc-[0-9]+','Inc-42'],['[é]+','éé']]),[True,False,True,True])
     def test_invalid_patterns_and_nontext_fields_are_rejected_on_save(self):
-        for pattern in ['[','a{9999999999999}','a'*513,'']:
+        for pattern in ['[','a{9999999999999}','a'*2049,'']:
             with self.assertRaises(Error):validate_rules([regex_rule(pattern)])
         with self.assertRaises(Error):validate_rules([regex_rule('.*')],[{'key':'ticket_reference','type':'number'}])
     def test_condition_hidden_and_optional_values(self):

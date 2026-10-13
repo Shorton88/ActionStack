@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from .core import Error, Conflict, KEY, SLUG, require, clone, utcnow, visible, digest, approval_rule, DURATIONS
 
+MAX_REGEX_LENGTH=2048
+
 def scalar(value):
     return (isinstance(value,(str,bool)) and (not isinstance(value,str) or len(value)<=200)) or (type(value) in [int,float] and math.isfinite(value))
 
@@ -21,7 +23,7 @@ def validate_rules(rules,fields=None):
         if r['operator'] in ['equals','not_equals','min','max'] and ('value' not in r or not scalar(r['value'])): raise Error(400,'The validation rule needs a text, boolean or finite numeric value.')
         if r['operator'] in ['min','max'] and type(r['value']) not in [int,float]: raise Error(400,'Minimum and maximum rules require a number.')
         if r['operator']=='regex':
-            if not isinstance(r.get('value'),str) or not 1<=len(r['value'])<=512: raise Error(400,'Enter a regex pattern of 1–512 characters.')
+            if not isinstance(r.get('value'),str) or not 1<=len(r['value'])<=MAX_REGEX_LENGTH: raise Error(400,f'Enter a regex pattern of 1–{MAX_REGEX_LENGTH:,} characters.')
             try: re.compile(r['value'])
             except (re.error,RecursionError,OverflowError): raise Error(400,'Invalid regex pattern for '+r['field']+'.')
         condition=r.get('when')

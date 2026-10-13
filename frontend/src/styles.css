@@ -2388,12 +2388,40 @@
   margin: 0 0 8px;
 }
 .actionstack-app .activity-run {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
   gap: 12px;
   border-top: 1px solid var(--line);
   padding: 10px 0;
+}
+.actionstack-app .activity-run-heading,
+.actionstack-app .actionstack-result-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.actionstack-app .activity-run-heading > div,
+.actionstack-app .actionstack-result-heading > div {
+  min-width: 0;
+}
+.actionstack-app .actionstack-result-counts {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.actionstack-app .actionstack-action-result {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.actionstack-app .actionstack-action-result + .actionstack-action-result {
+  margin-top: 12px;
+}
+.actionstack-app .actionstack-action-result p {
+  margin-bottom: 0;
+  font-size: 12px;
 }
 .actionstack-app .activity-run b {
   font-size: 13px;
@@ -2413,6 +2441,11 @@
 .actionstack-app .run-success {
   color: #a6dcc9;
   background: #19322d;
+}
+.actionstack-app .run-mixed,
+.actionstack-app .run-incomplete {
+  color: #f2d397;
+  background: #3b3020;
 }
 .actionstack-app .run-failed,
 .actionstack-app .activity-error {
@@ -3546,6 +3579,11 @@
   :is(.badge.failed, .badge.needs_attention, .run-failed) {
   color: #943042;
   background: #f9e2e7;
+}
+.actionstack-app[data-theme="light"] .run-mixed,
+.actionstack-app[data-theme="light"] .run-incomplete {
+  color: #765019;
+  background: #faedcf;
 }
 .actionstack-app[data-theme="light"]
   :is(

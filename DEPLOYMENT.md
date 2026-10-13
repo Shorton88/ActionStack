@@ -13,6 +13,32 @@ The REST handler supports Python 3.9 and 3.13. The app uses the signed-in Splunk
 
 After installation, open **ActionStack** as a Splunk administrator. Existing forms, workspaces, and submissions are retained when updating the app. Refresh Splunk Web after an update to load the new browser assets.
 
+### Search head cluster upgrades and app-list versions
+
+Stage the complete updated app at `$SPLUNK_HOME/etc/shcluster/apps/splunk_actionstack` on the deployer, then use your normal SHC bundle deployment procedure. Installing a package into the deployer's own `etc/apps` directory alone does not update the staged bundle. ActionStack packages declare `deployer_push_mode = full`; check for environment overrides. With this mode, updated default files replace member defaults, while member-local settings take precedence during merging. [Splunk deployer documentation](https://help.splunk.com/en/splunk-enterprise/administer/distributed-search/9.3/update-search-head-cluster-members/use-the-deployer-to-distribute-apps-and-configuration-updates).
+
+The version inside ActionStack comes from the frontend build. Splunk's app list uses the `[launcher] version` setting in `app.conf`. If they disagree, inspect the archive, staged app, and affected member rather than assuming the whole app failed to update. [Splunk app.conf reference](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.0/configuration-file-reference/10.0.3-configuration-file-reference/app.conf).
+
+For the 0.5.10 package, inspect its shipped configuration:
+
+```sh
+tar -xOf splunk_actionstack-0.5.10.spl splunk_actionstack/default/app.conf
+```
+
+On each affected search head, run:
+
+```sh
+"$SPLUNK_HOME/bin/splunk" btool app list launcher --app=splunk_actionstack --debug
+```
+
+The output identifies the winning version and source file on disk. It does not guarantee that the running process has loaded that value. [Splunk btool documentation](https://help.splunk.com/en/splunk-enterprise/administer/troubleshoot/10.4/first-steps/use-btool-to-troubleshoot-configurations).
+
+- **Old version in the member's `default/app.conf`:** this is not a browser-cache issue. Compare it with the package and the deployer's staged `default/app.conf`. Also inspect `etc/shcluster/apps/splunk_actionstack/local/app.conf` on the **deployer**, even if the member has no local file. In `merge_to_default` mode, a stale deployer-local version overrides the staged default and is written into the member's default file, while updated frontend assets can still deploy. If both staged copies are correct, check deployment status and the generated bundle. [Splunk merge behavior](https://help.splunk.com/en/splunk-enterprise/administer/distributed-search/9.3/update-search-head-cluster-members/use-the-deployer-to-distribute-apps-and-configuration-updates).
+- **Old version from `local/app.conf`:** a local override is masking the package. Have the cluster administrator back up the named file and remove only the stale `[launcher] version` override through the appropriate cluster configuration procedure. Also inspect the deployer's staged `local/app.conf` so later pushes cannot reintroduce it. Removing it only on the deployer will not clear an existing member-local override; a new package cannot override that setting either. Preserve other local settings.
+- **Correct version on disk, old version in Splunk Web:** verify which member served the page, complete any required cluster rolling restart, then reload Splunk Web. Manual changes to `app.conf` require a Splunk restart. [Splunk app.conf reference](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.0/configuration-file-reference/10.0.3-configuration-file-reference/app.conf).
+
+Keep release version metadata in `default/app.conf`; do not copy the whole file into `local/app.conf` to customize another setting. Release packages exclude `local/` and never rewrite cluster-local overrides automatically.
+
 ## Workspace setup
 
 The setup wizard creates the first workspace. Select **Create roles in Splunk** to provision:

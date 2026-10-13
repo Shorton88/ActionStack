@@ -33,6 +33,8 @@ def load_system_ca_bundles(context):
 MAX_RESPONSE=4*1024*1024
 MAX_ACTION_DATA_PREVIEW=16000
 MAX_ACTIVITY_DATA=256000
+ACTION_RESULT_PAGE_SIZE=25
+MAX_ACTION_RESULT_READS=5
 
 def action_data_preview(value,token):
     """Bound and redact connector data before exposing it in a receipt."""
@@ -200,10 +202,21 @@ class Soar:
                 summaries=self.action_summaries(container_id)
                 for row in actions['items']:
                     row['summaries']=summaries['items'].get(row['id'],[])
+                    row['result_counts']=summaries['counts'].get(row['id'],{})
+                    row['result_counts_complete']=not summaries['app_runs_truncated'] and row['id'] not in summaries['incomplete']
+                    row['result_total']=None if summaries['app_runs_truncated'] else summaries['totals'].get(row['id'])
+                    if row['result_counts'].get('success') and row['result_counts'].get('failed'):
+                        row['reported_status']=row['status']
+                        row['status']='mixed'
+                    elif not row['result_counts_complete']:
+                        row['reported_status']=row['status']
+                        row['status']='incomplete'
                 actions['summary_truncated']=summaries['truncated']
             except Error:
                 actions['summary_error']='Action results are unavailable. Check SOAR app-run read permissions.'
-        for group in output.values(): group['counts']=counts(group)
+        for group in output.values():
+            group['counts']=counts(group)
+            group['counts_basis']='soar_run_status'
         if details:
             blocks=[]; unavailable=False; limited=output['playbooks']['truncated'] or len(reports)>3
             old_timeout=self.timeout
@@ -226,11 +239,14 @@ class Soar:
         return output
 
     def action_summaries(self,container_id):
-        # Keep the summaries response key for compatibility; each result may
-        # contain a summary, data, or both inside app_run.result_data.
+        # The legacy summaries key contains one projection per action_result
+        # returned in app_run.result_data or the action_result endpoint. Keep
+        # its status, summary and data together; never join by input position.
         result=self.call('GET','app_run',query={'_filter_container':container_id,'page':0,'page_size':100,'sort':'id','order':'desc'})
         if not isinstance(result,dict) or not isinstance(result.get('data'),list) or type(result.get('count')) is not int or result['count']<len(result['data']) or len(result['data'])>100: raise Error(502,'Invalid app run list.')
-        items={}; truncated=result['count']>len(result['data']); fetched=0; data_budget=MAX_ACTIVITY_DATA
+        items={}; result_counts={}; totals={}; incomplete=set()
+        app_runs_truncated=result['count']>len(result['data'])
+        truncated=app_runs_truncated; fetched=0; data_budget=MAX_ACTIVITY_DATA
         def clean(value,depth=0):
             if depth>3: return '[truncated]'
             if isinstance(value,str): return response_detail({'message':value},self.token)[:500]
@@ -247,24 +263,43 @@ class Soar:
         for row in result['data']:
             if not isinstance(row,dict) or type(row.get('container')) is not int or row['container']!=container_id or type(row.get('id')) is not int or type(row.get('action_run')) is not int: raise Error(502,'App run does not match the event.')
             target=items.setdefault(row['action_run'],[])
+            outcomes=result_counts.setdefault(row['action_run'],{})
             data=row.get('result_data')
             if data is None:
-                if fetched>=5: truncated=True; continue
-                fetched+=1
-                prior_timeout=self.timeout
-                try:
-                    self.timeout=min(self.timeout,5)
-                    detail=self.call('GET','app_run/'+str(row['id'])+'/action_result',query={'page':0,'page_size':5})
-                finally: self.timeout=prior_timeout
-                if not isinstance(detail,dict) or not isinstance(detail.get('data'),list) or type(detail.get('count')) is not int or detail['count']<len(detail['data']) or len(detail['data'])>5: raise Error(502,'Invalid action results.')
-                data=detail['data']; truncated=truncated or detail['count']>len(data)
+                data=[]; page=0; total=None; complete=False
+                while fetched<MAX_ACTION_RESULT_READS:
+                    fetched+=1
+                    prior_timeout=self.timeout
+                    try:
+                        self.timeout=min(self.timeout,5)
+                        detail=self.call('GET','app_run/'+str(row['id'])+'/action_result',query={'page':page,'page_size':ACTION_RESULT_PAGE_SIZE})
+                    finally: self.timeout=prior_timeout
+                    if not isinstance(detail,dict) or not isinstance(detail.get('data'),list) or type(detail.get('count')) is not int or detail['count']<len(detail['data']) or len(detail['data'])>ACTION_RESULT_PAGE_SIZE: raise Error(502,'Invalid action results.')
+                    # A changing total means pages are not a complete snapshot.
+                    if total is not None and total!=detail['count']:
+                        total=None
+                        break
+                    total=detail['count']; data.extend(detail['data'])
+                    if len(data)==total: complete=True; break
+                    if len(data)>total: raise Error(502,'Invalid action results.')
+                    if len(detail['data'])<ACTION_RESULT_PAGE_SIZE: break
+                    page+=1
+                if not complete:
+                    incomplete.add(row['action_run']); truncated=True
+            else:
+                total=len(data) if isinstance(data,list) else None
             if not isinstance(data,list): raise Error(502,'Invalid action result list.')
+            action_id=row['action_run']
+            previous=totals.get(action_id,0)
+            totals[action_id]=None if previous is None or total is None else previous+total
             for entry in data:
                 if not isinstance(entry,dict): raise Error(502,'Invalid action result.')
-                if not entry.get('summary') and 'data' not in entry: continue
-                if len(target)>=5: truncated=True; break
-                status=entry.get('status')
-                projected={'app_run_id':row['id'],'status':'failed' if status=='failure' else status if status in ['success','failed','pending','running'] else 'unknown'}
+                status=run_status(entry.get('status'))
+                # Count every reported result, including those beyond the preview
+                # limit and failures that have no summary or result data.
+                outcomes[status]=outcomes.get(status,0)+1
+                if len(target)>=5: truncated=True; continue
+                projected={'app_run_id':row['id'],'status':status}
                 if entry.get('summary'):
                     summary=clean(entry['summary'])
                     if len(json.dumps(summary))>4000: summary={'notice':'Summary exceeds display limit. Open SOAR for the full summary.'}; truncated=True
@@ -281,7 +316,7 @@ class Soar:
                     projected['data_truncated']=limited
                     truncated=truncated or limited
                 target.append(projected)
-        return {'items':items,'truncated':truncated}
+        return {'items':items,'counts':result_counts,'totals':totals,'incomplete':sorted(incomplete),'app_runs_truncated':app_runs_truncated,'truncated':truncated}
 
     def lookup(self,kind,payload):
         query={'_filter_source_data_identifier':json.dumps(payload['source_data_identifier']),'page_size':100}

@@ -11,6 +11,8 @@ import xml.etree.ElementTree as ET
 ROOT=Path(__file__).resolve().parents[1]
 APP=ROOT/'splunk_actionstack'
 version=json.loads((ROOT/'package.json').read_text())['version']
+lock=json.loads((ROOT/'package-lock.json').read_text())
+assert lock['version']==version and lock['packages']['']['version']==version, 'Lockfile versions differ from package.json'
 conf=configparser.ConfigParser(); conf.read(APP/'default'/'app.conf')
 assert conf['launcher']['version']==version, 'Package versions differ'
 assert conf.getboolean('install','is_configured',fallback=False) is False, 'Do not package completed setup state'

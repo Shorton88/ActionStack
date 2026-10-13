@@ -1,12 +1,14 @@
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { RunCounts } from "./RunCounts";
+import { ActionResults } from "./ActionResults";
 import { api } from "./api";
 import { ReceiptTimeline } from "./ReceiptTimeline";
+import { runStatusLabel } from "./run-status.js";
 import type { ActivitySnapshot } from "./receipt-audit.js";
 import type { Activity, RunGroup, Submission } from "./types";
 
-function Runs({ title, group }: { title: string; group: RunGroup }) {
+export function Runs({ title, group }: { title: string; group: RunGroup }) {
   return (
     <div className="activity-group">
       <h4>
@@ -30,57 +32,29 @@ function Runs({ title, group }: { title: string; group: RunGroup }) {
           )}
           {group.items.map((run) => (
             <div className="activity-run" key={run.id}>
-              <div>
-                <b>{run.name}</b>
-                <small>
-                  {run.block_type || `Run #${run.id}`}
-                  {run.action && run.action !== run.name
-                    ? ` · ${run.action}`
-                    : ""}
-                  {run.playbook_run_id
-                    ? ` · Playbook run #${run.playbook_run_id}`
-                    : ""}
-                </small>
-                {run.summaries?.map((s, i) => (
-                  <Fragment key={s.app_run_id + ":" + i}>
-                    {s.summary !== undefined && (
-                      <details className="actionstack-run-summary">
-                        <summary>
-                          Action summary · {s.status} · app run #{s.app_run_id}
-                        </summary>
-                        <pre>
-                          {typeof s.summary === "string"
-                            ? s.summary
-                            : JSON.stringify(s.summary, null, 2)}
-                        </pre>
-                      </details>
-                    )}
-                    {s.data !== undefined && (
-                      <details className="actionstack-run-summary">
-                        <summary>
-                          Result data · {s.status} · app run #{s.app_run_id}
-                        </summary>
-                        <pre>
-                          {typeof s.data === "string"
-                            ? s.data
-                            : JSON.stringify(s.data, null, 2)}
-                        </pre>
-                        {s.data_truncated && (
-                          <p className="muted">
-                            Showing a limited preview. Open SOAR for complete
-                            results.
-                          </p>
-                        )}
-                      </details>
-                    )}
-                  </Fragment>
-                ))}
+              <div className="activity-run-heading">
+                <div>
+                  <b>{run.name}</b>
+                  <small>
+                    {run.block_type || `Run #${run.id}`}
+                    {run.action && run.action !== run.name
+                      ? ` · ${run.action}`
+                      : ""}
+                    {run.playbook_run_id
+                      ? ` · Playbook run #${run.playbook_run_id}`
+                      : ""}
+                  </small>
+                  {run.reported_status && (
+                    <small>
+                      SOAR run status: {runStatusLabel(run.reported_status)}
+                    </small>
+                  )}
+                </div>
+                <span className={`run-status run-${run.status}`}>
+                  {runStatusLabel(run.status)}
+                </span>
               </div>
-              <span className={`run-status run-${run.status}`}>
-                {run.status === "success"
-                  ? "Succeeded"
-                  : run.status.charAt(0).toUpperCase() + run.status.slice(1)}
-              </span>
+              <ActionResults run={run} />
             </div>
           ))}
           {group.notice && <p className="muted">{group.notice}</p>}

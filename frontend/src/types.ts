@@ -113,8 +113,16 @@ export type Activity = {
   actions: RunGroup;
   blocks?: RunGroup;
 };
+export type ActionResult = {
+  app_run_id: number;
+  status: string;
+  summary?: unknown;
+  data?: unknown;
+  data_truncated?: boolean;
+};
 export type RunGroup = {
   counts?: Record<string, number> | null;
+  counts_basis?: "soar_run_status";
   notice?: string;
   summary_error?: string;
   summary_truncated?: boolean;
@@ -124,13 +132,12 @@ export type RunGroup = {
     action?: string;
     block_type?: string;
     status: string;
-    summaries?: {
-      app_run_id: number;
-      status: string;
-      summary?: unknown;
-      data?: unknown;
-      data_truncated?: boolean;
-    }[];
+    reported_status?: string;
+    result_counts?: Record<string, number>;
+    result_counts_complete?: boolean;
+    result_total?: number | null;
+    // Legacy API name: each entry represents one returned action_result.
+    summaries?: ActionResult[];
     playbook_run_id: number | null;
     updated_at: string | null;
   }[];
