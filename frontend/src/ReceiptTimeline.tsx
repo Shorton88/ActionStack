@@ -1,4 +1,5 @@
 import { receiptTimeline } from "./receipt-audit.js";
+import { runStatusLabel } from "./run-status.js";
 import type { Activity, Submission } from "./types";
 
 export function ReceiptTimeline({
@@ -62,10 +63,7 @@ export function ReceiptTimeline({
               <span className={`run-status run-${row.status}`}>
                 {row.status === "submitted"
                   ? "Delivered"
-                  : row.status === "success"
-                    ? "Succeeded"
-                    : row.status.charAt(0).toUpperCase() +
-                      row.status.slice(1).replaceAll("_", " ")}
+                  : runStatusLabel(row.status)}
               </span>
             </div>
             <small className="actionstack-timeline-reference">

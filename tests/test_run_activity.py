@@ -3,10 +3,152 @@ import unittest
 from unittest.mock import Mock, patch
 import test_pages as fx
 from actionstack.core import Error,seed_form,validate_definition
-from actionstack.soar import Soar
+from actionstack.soar import Soar, ACTION_RESULT_PAGE_SIZE, MAX_ACTION_RESULT_READS
 from actionstack.run_activity import block_rows,utility_rows
 
 class RunActivityTests(unittest.TestCase):
+    def action_activity(self, app_runs, status='success'):
+        remote=Soar({'soar_url':'https://soar.example.test'},'secret-token')
+        remote.call=Mock(side_effect=[{'count':0,'data':[]},
+            {'count':1,'data':[{'id':4,'container':17,'name':'Sign out users','status':status}]},
+            {'count':len(app_runs),'data':app_runs}])
+        return remote.activity(17)['actions']
+
+    def test_each_action_result_keeps_its_summary_data_and_status_when_reordered(self):
+        entries=[
+            {'parameter':{'user':'alice@example.test'},'status':'success','summary':{'task_id':'task-alice','accepted':1},'data':[{'task_id':'task-alice'}]},
+            {'parameter':{'user':'bob@example.test'},'status':'failure','summary':{'task_id':'task-bob','accepted':0},'data':[]},
+        ]
+        for ordered in [entries,entries[::-1]]:
+            group=self.action_activity([{'id':9,'container':17,'action_run':4,'result_data':ordered}])
+            run=group['items'][0]
+            self.assertEqual(run['status'],'mixed')
+            self.assertEqual(run['reported_status'],'success')
+            self.assertEqual(run['result_counts'],{'success':1,'failed':1})
+            self.assertEqual(group['counts']['mixed'],0)
+            self.assertEqual(group['counts']['success'],1)
+            self.assertEqual(group['counts_basis'],'soar_run_status')
+            self.assertEqual(run['summaries'],[{'app_run_id':9,'status':'failed' if result['status']=='failure' else result['status'],
+                'summary':result['summary'],'data':result['data'],'data_truncated':False} for result in ordered])
+            self.assertNotIn('parameter',json.dumps(run))
+
+    def test_async_app_runs_remain_attached_to_their_action_run(self):
+        remote=Soar({'soar_url':'https://soar.example.test'},'')
+        actions=[{'id':4,'container':17,'name':'First action','status':'success'},
+            {'id':5,'container':17,'name':'Second action','status':'success'}]
+        result_a={'status':'success','summary':{'task':'A'},'data':[{'task':'A'}]}
+        result_b={'status':'failure','summary':{'task':'B'},'data':[{'task':'B'}]}
+        apps=[{'id':90,'container':17,'action_run':5,'result_data':[result_b]},
+            {'id':91,'container':17,'action_run':4,'result_data':[result_a]}]
+        for ordered in [apps,apps[::-1]]:
+            remote.call=Mock(side_effect=[{'count':0,'data':[]},{'count':2,'data':actions},{'count':2,'data':ordered}])
+            runs={run['id']:run for run in remote.activity(17)['actions']['items']}
+            self.assertEqual(runs[4]['summaries'][0]['summary'],result_a['summary'])
+            self.assertEqual(runs[4]['summaries'][0]['data'],result_a['data'])
+            self.assertEqual(runs[5]['summaries'][0]['summary'],result_b['summary'])
+            self.assertEqual(runs[5]['summaries'][0]['data'],result_b['data'])
+
+    def test_fallback_keeps_reversed_results_and_empty_payloads_separate(self):
+        remote=Soar({'soar_url':'https://soar.example.test'},'')
+        entries=[{'status':'failure','data':[]}, {'status':'success','summary':{'task':'A'},'data':[{'task':'A'}]}]
+        remote.call=Mock(side_effect=[{'count':1,'data':[{'id':9,'container':17,'action_run':4}]}, {'count':2,'data':entries}])
+        results=remote.action_summaries(17)['items'][4]
+        self.assertEqual(results[0],{'app_run_id':9,'status':'failed','data':[],'data_truncated':False})
+        self.assertEqual(results[1]['summary'],entries[1]['summary'])
+        self.assertEqual(results[1]['data'],entries[1]['data'])
+
+    def test_failed_items_beyond_preview_and_across_app_runs_still_mark_mixed(self):
+        rows=[{'id':9,'container':17,'action_run':4,'result_data':[{'status':'success','data':[]}]*5},
+            {'id':10,'container':17,'action_run':4,'result_data':[{'status':'failure'}]*2}]
+        group=self.action_activity(rows)
+        run=group['items'][0]
+        self.assertEqual(run['status'],'mixed')
+        self.assertEqual(run['result_counts'],{'success':5,'failed':2})
+        self.assertEqual(len(run['summaries']),5)
+        self.assertTrue(group['summary_truncated'])
+        rows[0]['result_data'] += rows.pop()['result_data']
+        self.assertEqual(self.action_activity(rows)['items'][0]['result_counts'],run['result_counts'])
+
+    def test_status_only_and_unknown_items_survive_without_fabricated_payloads(self):
+        group=self.action_activity([{'id':9,'container':17,'action_run':4,'result_data':[
+            {'status':'failure'}, {'status':'cancelled'}, {'status':'future-status'},
+        ]}],status='running')
+        run=group['items'][0]
+        self.assertEqual(run['status'],'running')
+        self.assertNotIn('reported_status',run)
+        self.assertEqual(run['result_counts'],{'failed':1,'cancelled':1,'unknown':1})
+        self.assertEqual(run['summaries'],[{'app_run_id':9,'status':s} for s in ['failed','cancelled','unknown']])
+
+    def test_single_outcome_retains_the_reported_run_status(self):
+        for status in ['success','failed','running','pending','cancelled','unknown']:
+            with self.subTest(status=status):
+                group=self.action_activity([{'id':9,'container':17,'action_run':4,'result_data':[{'status':status,'data':[]}]}],status)
+                self.assertEqual(group['items'][0]['status'],status)
+                self.assertNotIn('reported_status',group['items'][0])
+
+    def paginated_activity(self,pages,app_count=1):
+        remote=Soar({'soar_url':'https://soar.example.test'},'')
+        remote.call=Mock(side_effect=[{'count':0,'data':[]},
+            {'count':1,'data':[{'id':4,'container':17,'name':'Sign out users','status':'success'}]},
+            {'count':app_count,'data':[{'id':9,'container':17,'action_run':4}]}]+pages)
+        return remote,remote.activity(17)['actions']
+
+    def test_paginated_failure_after_first_page_marks_mixed(self):
+        size=ACTION_RESULT_PAGE_SIZE
+        remote,group=self.paginated_activity([
+            {'count':size+1,'data':[{'status':'success'}]*size},
+            {'count':size+1,'data':[{'status':'failure'}]}])
+        run=group['items'][0]
+        self.assertEqual(run['status'],'mixed')
+        self.assertEqual(run['result_counts'],{'success':size,'failed':1})
+        self.assertTrue(run['result_counts_complete'])
+        self.assertEqual(run['result_total'],size+1)
+        self.assertEqual(len(run['summaries']),5)
+        self.assertEqual([c.kwargs['query']['page'] for c in remote.call.call_args_list[3:]],[0,1])
+        self.assertEqual(remote.timeout,15)
+
+    def test_exhausted_read_budget_does_not_claim_all_results_succeeded(self):
+        size=ACTION_RESULT_PAGE_SIZE; budget=MAX_ACTION_RESULT_READS
+        remote,group=self.paginated_activity([{'count':size*budget+1,'data':[{'status':'success'}]*size}]*budget)
+        run=group['items'][0]
+        self.assertEqual(remote.call.call_count,3+budget)
+        self.assertEqual(run['status'],'incomplete')
+        self.assertEqual(run['reported_status'],'success')
+        self.assertFalse(run['result_counts_complete'])
+        self.assertEqual(run['result_total'],size*budget+1)
+        self.assertEqual(run['result_counts'],{'success':size*budget})
+        self.assertTrue(group['summary_truncated'])
+
+    def test_short_or_changing_pages_are_marked_incomplete(self):
+        for pages in [
+            [{'count':6,'data':[{'status':'success'}]*5}],
+            [{'count':26,'data':[{'status':'success'}]*25},{'count':27,'data':[{'status':'failure'}]*2}],
+        ]:
+            remote,group=self.paginated_activity(pages)
+            self.assertEqual(group['items'][0]['status'],'incomplete')
+            self.assertFalse(group['items'][0]['result_counts_complete'])
+
+    def test_omitted_app_runs_do_not_claim_complete_outcomes(self):
+        _,group=self.paginated_activity([{'count':1,'data':[{'status':'success'}]}],app_count=2)
+        self.assertEqual(group['items'][0]['status'],'incomplete')
+        self.assertIsNone(group['items'][0]['result_total'])
+
+    def test_inline_counts_and_paginated_counts_agree(self):
+        entries=[{'status':'success'}]*5+[{'status':'failure'}]
+        _,paged=self.paginated_activity([{'count':6,'data':entries}])
+        inline=self.action_activity([{'id':9,'container':17,'action_run':4,'result_data':entries}])
+        self.assertEqual(paged,inline)
+
+    def test_table_and_receipt_count_the_same_soar_run_status(self):
+        detailed=self.action_activity([{'id':9,'container':17,'action_run':4,'result_data':[{'status':'success'},{'status':'failure'}]}])
+        remote=Soar({'soar_url':'https://soar.example.test'},'')
+        remote.call=Mock(side_effect=[{'count':0,'data':[]},{'count':1,'data':[{'id':4,'container':17,'status':'success'}]}])
+        summary=remote.activity(17,details=False)['actions']
+        self.assertEqual(detailed['counts'],summary['counts'])
+        self.assertEqual(detailed['counts_basis'],summary['counts_basis'])
+        self.assertEqual(detailed['items'][0]['status'],'mixed')
+        self.assertEqual(remote.call.call_count,2)
+
     def test_custom_names_status_counts_and_summary_reads_skip_details(self):
         remote=Soar({'soar_url':'https://soar.example.test'},'token')
         remote.call=Mock(side_effect=[{'count':1,'data':[{'id':2,'container':17,'playbook':3,'status':'running'}]},
@@ -15,7 +157,7 @@ class RunActivityTests(unittest.TestCase):
         self.assertEqual(remote.call.call_count,2)
         self.assertEqual(result['actions']['items'][0]['name'],'Scan workstation')
         self.assertEqual(result['actions']['items'][0]['action'],'run query')
-        self.assertEqual(result['actions']['counts'],dict(success=1,failed=1,running=1,pending=0,cancelled=0,unknown=1))
+        self.assertEqual(result['actions']['counts'],dict(success=1,failed=1,mixed=0,running=1,pending=0,cancelled=0,unknown=1))
         self.assertNotIn('blocks',result)
     def test_missing_status_group_is_not_zero_success(self):
         remote=Soar({'soar_url':'https://soar.example.test'},'token');remote.call=Mock(side_effect=Error(403,'denied'))
@@ -59,13 +201,14 @@ class ActivitySummaryServiceTests(unittest.TestCase):
     tearDown=fx.ServiceTests.tearDown
     def test_summary_acl_and_payload_excludes_action_results(self):
         receipt=self.svc.submit(self.user,fx.ServiceTests.body(self));remote=Mock();remote.timeout=15
-        remote.activity.return_value={'actions':{'items':[{'summaries':['private']}],'total':1,'counts':{'success':1},'truncated':False,'error':None},'playbooks':{'items':[],'total':0,'counts':{},'truncated':False,'error':None}}
+        remote.activity.return_value={'actions':{'items':[{'summaries':['private']}],'total':1,'counts':{'success':1},'counts_basis':'soar_run_status','truncated':False,'error':None},'playbooks':{'items':[],'total':0,'counts':{},'truncated':False,'error':None}}
         self.factory.reset_mock();self.factory.return_value=remote;self.factory.side_effect=None
         with self.assertRaises(Error):self.svc.activity(fx.actor('bob'),receipt['id'],True)
         self.factory.assert_not_called()
         result=self.svc.dispatch(self.user,'GET','/submissions/'+receipt['id']+'/activity-summary')
         remote.activity.assert_called_once_with(receipt['container_id'],details=False)
         self.assertEqual(remote.timeout,5);self.assertNotIn('private',json.dumps(result));self.assertNotIn('items',result['actions'])
+        self.assertEqual(result['actions']['counts_basis'],'soar_run_status')
     def test_summary_budget_does_not_consume_receipt_or_delivery_budget(self):
         receipt=self.svc.submit(self.user,fx.ServiceTests.body(self))
         with patch('actionstack.service.time.time',return_value=6000):

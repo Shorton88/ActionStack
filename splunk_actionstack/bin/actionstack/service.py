@@ -339,7 +339,7 @@ class Service(Workspaces,ValidationPolicies):
         if summary:
             remote.timeout=min(getattr(remote,'timeout',5),5)
             result=remote.activity(record['container_id'],details=False)
-            result={key:{k:group.get(k) for k in ['total','counts','truncated','error']} for key,group in result.items() if key in ['playbooks','actions']}
+            result={key:{k:group.get(k) for k in ['total','counts','counts_basis','truncated','error']} for key,group in result.items() if key in ['playbooks','actions']}
         else: result=remote.activity(record['container_id'])
         return dict(result,checked_at=utcnow(),automation_enabled=bool(record['artifact_payload'].get('run_automation')),demo=self.demo)
 

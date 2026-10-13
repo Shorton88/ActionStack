@@ -70,27 +70,40 @@ export function FieldValidation({
           {!["ip_address", "domain", "sha1", "sha256"].includes(r.operator) && (
             <label className="field">
               Value
-              <input
-                value={String(r.value ?? "")}
-                maxLength={r.operator === "regex" ? 512 : 200}
-                placeholder={
-                  r.operator === "like" || r.operator === "not_like"
-                    ? "e.g. *@example.com"
-                    : r.operator === "regex"
-                      ? "e.g. INC-[0-9]+"
+              {r.operator === "regex" ? (
+                <textarea
+                  value={String(r.value ?? "")}
+                  maxLength={2048}
+                  rows={4}
+                  spellCheck={false}
+                  placeholder="e.g. INC-[0-9]+"
+                  onChange={(e) => update(i, { value: e.target.value })}
+                />
+              ) : (
+                <input
+                  value={String(r.value ?? "")}
+                  maxLength={200}
+                  placeholder={
+                    r.operator === "like" || r.operator === "not_like"
+                      ? "e.g. *@example.com"
                       : field.type === "checkbox"
                         ? "true or false"
                         : "Value to compare"
-                }
-                onChange={(e) => update(i, { value: e.target.value })}
-              />
+                  }
+                  onChange={(e) => update(i, { value: e.target.value })}
+                />
+              )}
               {["like", "not_like"].includes(r.operator) && (
                 <small>
                   Use * for any text and ? for one character. Case-sensitive.
                 </small>
               )}
               {r.operator === "regex" && (
-                <small>Matches the whole value. Use (?i) to ignore case.</small>
+                <small>
+                  {String(r.value ?? "").length.toLocaleString()} / 2,048
+                  characters. Matches the whole value. Use (?i) to ignore case;
+                  (?x) for a pattern formatted across lines.
+                </small>
               )}
             </label>
           )}

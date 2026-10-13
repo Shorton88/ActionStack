@@ -13,13 +13,16 @@ ActionStack is an AI-driven project attempting to build something useful for the
 - Team workspaces with access controlled by Splunk roles.
 - Automation catalog with search, categories, favorites, and pagination.
 - Form builder with conditional fields, validation, lookup inputs, multiple-value inputs, and collapsible sections.
+- Regex validation supports patterns up to 2,048 characters and matches the entire field value. Use `(?x)` when formatting a pattern across lines.
 - Drafts, publishing, version history, cloning, and recoverable form deletion.
 - Reusable workspace categories and JSON form export/import.
 - Configurable SOAR labels, tags, CEF mappings, and approval requirements handled by your playbooks.
-- Paginated submission history with playbook/action status counts, delivery retries, and receipts with custom action names, reported block results, summaries, and data.
+- Paginated submission history with playbook/action status counts, delivery retries, and receipts with custom action names, reported block results, and separate groups for each returned action result’s summary and data. Actions with both successful and failed results show Mixed results alongside SOAR’s reported run status. Result grouping does not depend on input or completion order.
 - Optional receipt timeline and JSON receipt / CSV submission exports for audit review.
 - Optional retention for delivered submissions, with SOAR events retained.
 - Light, dark, and system themes.
+
+Submission and receipt group counts reflect **SOAR run statuses**, which can differ from individual action-result outcomes. Receipts read additional result pages within a five-request budget and display up to five result details per action. When coverage is incomplete, counts are marked partial and the action shows **Results incomplete** unless mixed outcomes are already confirmed. Open SOAR for the complete results.
 
 ## Installation
 

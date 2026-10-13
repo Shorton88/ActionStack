@@ -31,6 +31,18 @@ test('invalid and absent dates do not become fabricated event times',()=>{
   assert.equal(result.length,2);assert.equal(result[1].at,null);
   assert.equal(result[1].name,'Latest delivery update');
 });
+test('mixed action results retain the SOAR status and result groups in timelines and exports',()=>{
+  const action={...activity.actions.items[0],status:'mixed',reported_status:'success',result_counts:{success:1,failed:1},summaries:[
+    {app_run_id:3,status:'success',summary:{accepted:1},data:[{task_id:'alice-task'}]},
+    {app_run_id:3,status:'failed',data:[]},
+  ]};
+  const mixed={...activity,actions:group([action])};
+  const result=receiptExport(submission,{data:mixed,error:'',loading:false},meta);
+  const timeline=result.timeline.find(row=>row.id==='actions:2');
+  assert.equal(timeline.status,'mixed');
+  assert.match(timeline.detail,/SOAR run status: Succeeded/);
+  assert.deepEqual(result.activity.actions.items[0],action);
+});
 test('receipt export preserves submitted values, result limits and stale-read failures, but excludes connection internals',()=>{
   const source={...submission,connection:{token:'secret'},actor:{session:'secret'},container_payload:{private:'secret'},fingerprint:'secret'};
   const result=receiptExport(source,{data:activity,error:'Refresh failed',loading:false},meta);
@@ -40,6 +52,14 @@ test('receipt export preserves submitted values, result limits and stale-read fa
   assert.equal(result.activity.checked_at,activity.checked_at);assert.equal(result.activity_error,'Refresh failed');
   assert.equal(result.receipt.form_snapshot.version,2);
   assert.ok(!JSON.stringify(result).includes('secret'));
+});
+test('incomplete outcome coverage is retained in receipt exports and timeline',()=>{
+  const action={...activity.actions.items[0],status:'incomplete',reported_status:'success',result_counts_complete:false,result_counts:{success:125},result_total:126};
+  const snapshot={...activity,actions:{...group([action]),counts_basis:'soar_run_status',counts:{success:1},summary_truncated:true}};
+  const result=receiptExport(submission,{data:snapshot,error:'',loading:false},meta);
+  assert.equal(result.activity.actions.items[0].result_counts_complete,false);
+  assert.equal(result.activity.actions.items[0].result_total,126);
+  assert.equal(result.timeline.find(row=>row.id==='actions:2').status,'incomplete');
 });
 test('unavailable activity is explicit and does not prevent a delivery receipt export',()=>{
   const result=receiptExport(submission,{data:null,error:'Access unavailable',loading:false},meta);

@@ -3,7 +3,7 @@ import hashlib
 import json
 import re
 
-STATUSES = ('success', 'failed', 'running', 'pending', 'cancelled', 'unknown')
+STATUSES = ('success', 'failed', 'mixed', 'running', 'pending', 'cancelled', 'unknown')
 
 
 def run_status(value):
@@ -14,7 +14,9 @@ def run_status(value):
 def counts(group):
     if group.get('error'): return None
     result = dict.fromkeys(STATUSES, 0)
-    for item in group['items']: result[run_status(item.get('status'))] += 1
+    # Group badges always count SOAR's run status, in both list and receipt.
+    # Per-result outcomes (including Mixed results) are shown separately.
+    for item in group['items']: result[run_status(item.get('reported_status',item.get('status')))] += 1
     return result
 
 

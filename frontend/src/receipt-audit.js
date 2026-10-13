@@ -1,3 +1,4 @@
+import { runStatusLabel } from "./run-status.js";
 /** @typedef {import('./types').Submission} Submission */
 /** @typedef {import('./types').Activity} Activity */
 /** @typedef {{data: Activity | null, error: string, loading: boolean}} ActivitySnapshot */
@@ -43,7 +44,7 @@ export function receiptTimeline(submission, activity) {
         id: `${key}:${run.id}`,
         kind: run.block_type || kind,
         name: run.name,
-        detail: `${key === "blocks" ? "Block" : "Run"} #${run.id}${run.playbook_run_id ? ` · Playbook run #${run.playbook_run_id}` : ""}`,
+        detail: `${key === "blocks" ? "Block" : "Run"} #${run.id}${run.playbook_run_id ? ` · Playbook run #${run.playbook_run_id}` : ""}${run.reported_status ? ` · SOAR run status: ${runStatusLabel(run.reported_status)}` : ""}`,
         status: run.status,
         at: timestamp(run.updated_at),
       });
